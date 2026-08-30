@@ -1,11 +1,12 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
-from payments.services import MercadoPagoClient
+from django.views.decorators.http import require_POST
 
 from .models import Plan
-from .services import reserve_subscription
+from .services import begin_or_resume_payment, reserve_subscription
 
 
 def plans(request):
@@ -18,13 +19,24 @@ def checkout(request, code):
     if request.method == "POST":
         try:
             sub = reserve_subscription(request.user, plan)
-            response = MercadoPagoClient().create_subscription(sub)
-            sub.provider_subscription_id = str(response.get("id", ""))
-            sub.save(update_fields=["provider_subscription_id"])
-            return redirect(response["init_point"])
+            return redirect(begin_or_resume_payment(sub))
         except Exception as exc:
             messages.error(request, str(exc))
     return render(request, "subscriptions/checkout.html", {"plan": plan})
+
+
+@login_required
+@require_POST
+def resume_payment(request):
+    subscription = request.user.subscriptions.filter(status="pending").order_by("-created_at").first()
+    if not subscription:
+        messages.error(request, "Nenhuma assinatura pendente foi encontrada.")
+        return redirect("dashboard:home")
+    try:
+        return redirect(begin_or_resume_payment(subscription))
+    except Exception as error:
+        messages.error(request, str(error))
+        return redirect(reverse("dashboard:home") + "?section=pagamentos")
 
 
 @login_required

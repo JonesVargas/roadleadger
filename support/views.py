@@ -31,5 +31,7 @@ def detail(request, pk):
         msg.ticket = ticket
         msg.author = request.user
         msg.save()
+        ticket.status = "open"
+        ticket.save(update_fields=["status", "updated_at"])
         return redirect("support:detail", pk=pk)
     return render(request, "support/detail.html", {"ticket": ticket, "form": form})

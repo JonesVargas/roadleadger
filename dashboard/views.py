@@ -9,10 +9,22 @@ from accounts.models import User
 from audit.models import AuditEvent
 from core.models import FAQ, Feature, LegalPage, ServiceStatus, SocialLink, UpdatePost
 from downloads.models import AppVersion, DownloadEvent
-from payments.models import Payment
+from payments.models import Payment, PaymentProviderConfig
 from subscriptions.models import Plan, Subscription
+from support.forms import MessageForm
+from support.models import SupportTicket, TicketMessage
 
-from .forms import AppVersionForm, FAQForm, FeatureForm, LegalPageForm, PlanForm, ServiceStatusForm, SocialLinkForm, UpdatePostForm
+from .forms import (
+    AppVersionForm,
+    FAQForm,
+    FeatureForm,
+    LegalPageForm,
+    PaymentProviderConfigForm,
+    PlanForm,
+    ServiceStatusForm,
+    SocialLinkForm,
+    UpdatePostForm,
+)
 
 
 @login_required
@@ -20,7 +32,29 @@ def home(request):
     if request.user.is_superuser:
         return redirect("dashboard:manager")
     sub = request.user.subscriptions.select_related("plan").order_by("-created_at").first()
-    return render(request, "dashboard/home.html", {"subscription": sub, "devices": request.user.devices.filter(revoked_at__isnull=True), "versions": AppVersion.objects.filter(published=True)[:3], "payments": Payment.objects.filter(subscription__user=request.user)[:10]})
+    section = request.GET.get("section", "conta")
+    if section not in {"conta", "pagamentos", "downloads"}:
+        section = "conta"
+    has_subscription = bool(sub) or request.user.lifetime_access
+    can_download = request.user.lifetime_access or bool(sub and sub.grants_access)
+    versions = []
+    if can_download:
+        versions = [
+            version
+            for version in AppVersion.objects.filter(published=True)
+            if request.user.lifetime_access
+            or not version.min_plan_codes
+            or sub.plan.code in version.min_plan_codes
+        ][:10]
+    return render(request, "dashboard/home.html", {
+        "subscription": sub,
+        "devices": request.user.devices.filter(revoked_at__isnull=True),
+        "versions": versions,
+        "payments": Payment.objects.filter(subscription__user=request.user)[:20],
+        "section": section,
+        "has_subscription": has_subscription,
+        "can_download": can_download,
+    })
 
 
 def superuser_required(view):
@@ -48,6 +82,23 @@ def manager(request):
     entity, edit_id = request.GET.get("edit"), request.GET.get("id")
     edit_object = get_object_or_404(MANAGED[entity][0], pk=edit_id) if entity in MANAGED and edit_id else None
     forms = {key: form_class(instance=edit_object if entity == key else None, prefix=key) for key, (_model, form_class, _section) in MANAGED.items()}
+    payment_configs = {
+        item.environment: item for item in PaymentProviderConfig.objects.all()
+    }
+    payment_forms = {
+        environment: PaymentProviderConfigForm(
+            instance=payment_configs.get(environment), environment=environment,
+            prefix=f"payment-{environment}",
+        )
+        for environment, _label in PaymentProviderConfig.ENVIRONMENTS
+    }
+    selected_ticket = None
+    selected_ticket_id = request.GET.get("ticket")
+    if selected_ticket_id:
+        selected_ticket = get_object_or_404(
+            SupportTicket.objects.select_related("user").prefetch_related("messages__author"),
+            pk=selected_ticket_id,
+        )
     context = {
         "users": User.objects.count(),
         "active_subscriptions": Subscription.objects.filter(status__in=["active", "authorized"]).count(),
@@ -62,9 +113,79 @@ def manager(request):
         "subscriptions": Subscription.objects.select_related("user", "plan").order_by("-updated_at")[:100],
         "subscription_statuses": Subscription.STATUS,
         "forms": forms, "editing": entity, "edit_id": edit_id,
+        "payment_configs": payment_configs,
+        "payment_forms": payment_forms,
+        "support_tickets": SupportTicket.objects.select_related("user").all()[:200],
+        "open_support_tickets": SupportTicket.objects.filter(status="open").count(),
+        "selected_ticket": selected_ticket,
+        "support_reply_form": MessageForm(prefix="support"),
         "section": request.GET.get("section", "visao-geral"),
     }
     return render(request, "dashboard/manager.html", context)
+
+
+@superuser_required
+def manager_support_reply(request, ticket_id):
+    ticket = get_object_or_404(SupportTicket, pk=ticket_id)
+    if request.method == "POST":
+        form = MessageForm(request.POST, prefix="support")
+        if form.is_valid():
+            TicketMessage.objects.create(
+                ticket=ticket,
+                author=request.user,
+                body=form.cleaned_data["body"],
+            )
+            ticket.status = "waiting"
+            ticket.save(update_fields=["status", "updated_at"])
+            AuditEvent.objects.create(
+                actor=request.user,
+                action="manager.support.reply",
+                target=f"SupportTicket#{ticket.pk}",
+            )
+            messages.success(request, "Resposta enviada ao cliente.")
+    return redirect(f'{_manager_url("suporte")}&ticket={ticket.pk}')
+
+
+@superuser_required
+def manager_support_status(request, ticket_id):
+    ticket = get_object_or_404(SupportTicket, pk=ticket_id)
+    if request.method == "POST":
+        status = request.POST.get("status")
+        if status in {value for value, _label in SupportTicket.STATUS}:
+            ticket.status = status
+            ticket.save(update_fields=["status", "updated_at"])
+            AuditEvent.objects.create(
+                actor=request.user,
+                action="manager.support.status",
+                target=f"SupportTicket#{ticket.pk}",
+                metadata={"status": status},
+            )
+            messages.success(request, "Situação do chamado atualizada.")
+    return redirect(f'{_manager_url("suporte")}&ticket={ticket.pk}')
+
+
+@superuser_required
+def manager_payment_config(request, environment):
+    valid_environments = {value for value, _label in PaymentProviderConfig.ENVIRONMENTS}
+    if request.method != "POST" or environment not in valid_environments:
+        return redirect(_manager_url("pagamentos"))
+    instance = PaymentProviderConfig.objects.filter(environment=environment).first()
+    form = PaymentProviderConfigForm(
+        request.POST, instance=instance, environment=environment,
+        prefix=f"payment-{environment}",
+    )
+    if form.is_valid() and form.cleaned_data["environment"] == environment:
+        item = form.save()
+        AuditEvent.objects.create(
+            actor=request.user,
+            action="manager.payment.credentials",
+            target=f"MercadoPago:{environment}",
+            metadata={"active": item.active},
+        )
+        messages.success(request, "Credenciais atualizadas com segurança.")
+    else:
+        messages.error(request, "Não foi possível salvar as credenciais.")
+    return redirect(_manager_url("pagamentos"))
 
 
 @superuser_required

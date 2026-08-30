@@ -65,15 +65,37 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 LANGUAGE_CODE, TIME_ZONE, USE_I18N, USE_TZ = "pt-br", "America/Sao_Paulo", True, True
 STATIC_URL, STATIC_ROOT, STATICFILES_DIRS = "/static/", BASE_DIR / "staticfiles", [BASE_DIR / "static"]
-MEDIA_URL, MEDIA_ROOT = "/media/", BASE_DIR / "media"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = Path(env("MEDIA_ROOT", default=str(BASE_DIR / "media")))
 STATIC_BACKEND = (
     "whitenoise.storage.CompressedManifestStaticFilesStorage"
     if not DEBUG
     else "django.contrib.staticfiles.storage.StaticFilesStorage"
 )
+DOWNLOAD_STORAGE = env("DOWNLOAD_STORAGE", default="local").lower()
+if DOWNLOAD_STORAGE == "s3":
+    DEFAULT_STORAGE = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "access_key": env("AWS_ACCESS_KEY_ID"),
+            "secret_key": env("AWS_SECRET_ACCESS_KEY"),
+            "bucket_name": env("AWS_STORAGE_BUCKET_NAME"),
+            "endpoint_url": env("AWS_S3_ENDPOINT_URL", default=None),
+            "region_name": env("AWS_S3_REGION_NAME", default=None),
+            "default_acl": "private",
+            "querystring_auth": True,
+            "file_overwrite": False,
+        },
+    }
+else:
+    DEFAULT_STORAGE = {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": MEDIA_ROOT, "base_url": MEDIA_URL},
+    }
+
 STORAGES = {
     "staticfiles": {"BACKEND": STATIC_BACKEND},
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "default": DEFAULT_STORAGE,
 }
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
@@ -82,11 +104,19 @@ EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="RoadLedger <no-reply@roadledger.local>")
 SITE_URL = env("SITE_URL", default="http://127.0.0.1:8000")
 MP_ENVIRONMENT = env("MP_ENVIRONMENT", default="sandbox")
+MP_PUBLIC_KEY = env("MP_PUBLIC_KEY", default="")
 MP_ACCESS_TOKEN = env("MP_ACCESS_TOKEN", default="")
+MP_CLIENT_ID = env("MP_CLIENT_ID", default="")
+MP_CLIENT_SECRET = env("MP_CLIENT_SECRET", default="")
 MP_WEBHOOK_SECRET = env("MP_WEBHOOK_SECRET", default="")
 MP_WEBHOOK_URL = env("MP_WEBHOOK_URL", default=f"{SITE_URL}/pagamentos/webhook/mercado-pago/")
+PAYMENT_CREDENTIALS_KEY = env("PAYMENT_CREDENTIALS_KEY", default=SECRET_KEY)
 SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=False)
-SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=False)
+SECURE_HSTS_PRELOAD = env.bool("SECURE_HSTS_PRELOAD", default=False)
+SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=not DEBUG)
+CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=not DEBUG)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True

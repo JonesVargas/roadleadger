@@ -34,6 +34,7 @@ class Subscription(models.Model):
     status = models.CharField(max_length=20, choices=STATUS, default="pending")
     provider = models.CharField(max_length=30, default="mercado_pago")
     provider_subscription_id = models.CharField(max_length=120, blank=True, db_index=True)
+    provider_checkout_url = models.URLField(max_length=600, blank=True)
     current_period_start = models.DateTimeField(null=True, blank=True)
     current_period_end = models.DateTimeField(null=True, blank=True)
     cancel_at_period_end = models.BooleanField(default=False)

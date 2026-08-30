@@ -9,6 +9,7 @@ from django.utils.dateparse import parse_datetime
 
 from subscriptions.models import Subscription, SubscriptionHistory
 
+from .credentials import get_mercado_pago_credentials
 from .models import Payment
 
 
@@ -16,14 +17,15 @@ class MercadoPagoClient:
     base = "https://api.mercadopago.com"
 
     def __init__(self, token=None):
-        self.token = token if token is not None else settings.MP_ACCESS_TOKEN
+        self.credentials = get_mercado_pago_credentials()
+        self.token = token if token is not None else self.credentials.access_token
 
     def _headers(self):
         return {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
 
     def create_subscription(self, subscription):
         if not self.token:
-            raise RuntimeError("Configure MP_ACCESS_TOKEN no ambiente sandbox.")
+            raise RuntimeError("Configure o Access Token do Mercado Pago no painel administrativo.")
         payload = {
             "reason": f"RoadLedger - {subscription.plan.name}",
             "external_reference": str(subscription.pk),
@@ -57,7 +59,7 @@ class MercadoPagoClient:
 
 
 def valid_signature(request, data_id):
-    secret = settings.MP_WEBHOOK_SECRET
+    secret = get_mercado_pago_credentials().webhook_secret
     if not secret:
         return False
     parts = dict(p.split("=", 1) for p in request.headers.get("x-signature", "").split(",") if "=" in p)

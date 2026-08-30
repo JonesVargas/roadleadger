@@ -9,7 +9,8 @@ from django.urls import reverse
 from accounts.models import User
 from subscriptions.models import Plan, Subscription
 
-from .models import WebhookEvent
+from .credentials import encrypt_secret
+from .models import PaymentProviderConfig, WebhookEvent
 
 
 class WebhookTests(TestCase):
@@ -41,3 +42,26 @@ class WebhookTests(TestCase):
             self.client.post(reverse("payments:webhook"), "{}", content_type="application/json").status_code,
             401,
         )
+
+    @patch("payments.views.process_webhook")
+    def test_webhook_uses_active_database_secret(self, processor):
+        PaymentProviderConfig.objects.create(
+            environment="sandbox",
+            active=True,
+            webhook_secret_encrypted=encrypt_secret("database-secret"),
+        )
+        payload = {"id": "evt-db", "type": "preapproval", "data": {"id": "pre-db"}}
+        ts, request_id = "456", "request-db"
+        manifest = f"id:pre-db;request-id:{request_id};ts:{ts};"
+        signature = hmac.new(
+            b"database-secret", manifest.encode(), hashlib.sha256
+        ).hexdigest()
+        response = self.client.post(
+            reverse("payments:webhook"),
+            json.dumps(payload),
+            HTTP_X_SIGNATURE=f"ts={ts},v1={signature}",
+            HTTP_X_REQUEST_ID=request_id,
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 200)
+        processor.assert_called_once()

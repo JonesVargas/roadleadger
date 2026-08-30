@@ -2,6 +2,8 @@ from django import forms
 
 from core.models import FAQ, Feature, LegalPage, ServiceStatus, SocialLink, UpdatePost
 from downloads.models import AppVersion
+from payments.credentials import encrypt_secret
+from payments.models import PaymentProviderConfig
 from subscriptions.models import Plan
 
 
@@ -10,6 +12,78 @@ class AdminModelForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.setdefault("class", "admin-input")
+
+
+class PaymentProviderConfigForm(forms.Form):
+    environment = forms.ChoiceField(
+        label="Ambiente", choices=PaymentProviderConfig.ENVIRONMENTS,
+        widget=forms.HiddenInput,
+    )
+    public_key = forms.CharField(label="Public Key", required=False, max_length=180)
+    access_token = forms.CharField(
+        label="Access Token", required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Deixe vazio para manter o token já salvo.",
+    )
+    client_id = forms.CharField(label="Client ID", required=False, max_length=180)
+    client_secret = forms.CharField(
+        label="Client Secret", required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Deixe vazio para manter o segredo já salvo.",
+    )
+    webhook_secret = forms.CharField(
+        label="Assinatura secreta do webhook", required=False,
+        widget=forms.PasswordInput(render_value=False),
+        help_text="Deixe vazio para manter o segredo já salvo.",
+    )
+    activate = forms.BooleanField(label="Usar este ambiente agora", required=False)
+
+    def __init__(self, *args, instance=None, environment=None, **kwargs):
+        self.instance = instance
+        environment = environment or (instance.environment if instance else "sandbox")
+        initial = kwargs.setdefault("initial", {})
+        initial.update({
+            "environment": environment,
+            "public_key": instance.public_key if instance else "",
+            "client_id": instance.client_id if instance else "",
+            "activate": instance.active if instance else False,
+        })
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", "admin-input")
+
+    def save(self):
+        environment = self.cleaned_data["environment"]
+        item, _created = PaymentProviderConfig.objects.get_or_create(environment=environment)
+        item.public_key = self.cleaned_data["public_key"]
+        item.client_id = self.cleaned_data["client_id"]
+        secret_fields = {
+            "access_token": "access_token_encrypted",
+            "client_secret": "client_secret_encrypted",
+            "webhook_secret": "webhook_secret_encrypted",
+        }
+        for source, target in secret_fields.items():
+            if self.cleaned_data[source]:
+                setattr(item, target, encrypt_secret(self.cleaned_data[source]))
+        if self.cleaned_data["activate"]:
+            PaymentProviderConfig.objects.exclude(pk=item.pk).update(active=False)
+            item.active = True
+        item.save()
+        return item
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("activate"):
+            return cleaned
+        existing_token = bool(self.instance and self.instance.access_token_encrypted)
+        existing_webhook = bool(self.instance and self.instance.webhook_secret_encrypted)
+        if not cleaned.get("access_token") and not existing_token:
+            self.add_error("access_token", "Informe o Access Token antes de ativar.")
+        if not cleaned.get("webhook_secret") and not existing_webhook:
+            self.add_error(
+                "webhook_secret", "Informe a assinatura secreta do webhook antes de ativar."
+            )
+        return cleaned
 
 
 class AppVersionForm(AdminModelForm):

@@ -10,4 +10,7 @@ urlpatterns = [
     path("gestao/remover/<str:entity>/<int:object_id>/", views.manager_delete, name="manager_delete"),
     path("gestao/cliente/<int:user_id>/acesso/", views.manager_user_action, name="manager_user_action"),
     path("gestao/assinatura/<int:subscription_id>/status/", views.manager_subscription_status, name="manager_subscription_status"),
+    path("gestao/pagamentos/<str:environment>/", views.manager_payment_config, name="manager_payment_config"),
+    path("gestao/suporte/<int:ticket_id>/responder/", views.manager_support_reply, name="manager_support_reply"),
+    path("gestao/suporte/<int:ticket_id>/status/", views.manager_support_status, name="manager_support_status"),
 ]

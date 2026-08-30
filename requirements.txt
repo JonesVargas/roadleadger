@@ -5,6 +5,7 @@ whitenoise>=6.8,<7
 gunicorn>=23,<24
 psycopg[binary]>=3.2,<4
 requests>=2.32,<3
+cryptography>=45,<47
 django-ratelimit>=4.1,<5
 django-storages[s3]>=1.14,<2
 ruff>=0.12,<1
