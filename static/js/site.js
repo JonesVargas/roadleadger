@@ -1,0 +1,1 @@
+const toggle=document.querySelector('.menu-toggle'),nav=document.querySelector('.topbar nav');if(toggle){toggle.addEventListener('click',()=>{const open=nav.classList.toggle('open');toggle.setAttribute('aria-expanded',open)})}

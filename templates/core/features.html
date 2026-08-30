@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Recursos · RoadLedger{% endblock %}
+{% block content %}
+<section class="features-hero">
+  <div class="features-hero-copy"><span class="eyebrow">Muito além de controlar saldo</span><h1>Sua carreira na estrada finalmente tem consequências.</h1><p>O RoadLedger transforma Euro Truck Simulator 2 e American Truck Simulator em uma jornada de carreira completa. Cada entrega ajuda a construir patrimônio, reputação e novas oportunidades.</p><div class="actions"><a class="button" href="{% url 'accounts:register' %}">Começar minha carreira</a><a class="button ghost" href="{% url 'core:how' %}">Ver como funciona</a></div></div>
+  <img src="{% static 'img/feature-command-center.png' %}" alt="Painel de gestão de carreira do RoadLedger">
+</section>
+<section class="section feature-story">
+  <div class="feature-story-heading"><span class="eyebrow">Uma carreira do seu jeito</span><h2>Comece ao volante. Cresça até comandar sua própria transportadora.</h2><p>Escolha como quer viver a estrada e evolua no seu ritmo. Seus perfis de ETS2 e ATS permanecem separados, com moeda e unidade de distância adequadas à experiência escolhida.</p></div>
+  <div class="career-path">
+    <article><b>01</b><h3>Funcionário</h3><p>Assine contrato com uma empresa, cumpra metas e receba salário semanal, comissões e benefícios. Caminhão e despesas operacionais ficam por conta da empresa; suas multas continuam sendo sua responsabilidade.</p></article>
+    <article><b>02</b><h3>Agregado</h3><p>Trabalhe com caminhão próprio para uma empresa específica. Receba a porcentagem negociada de cada frete e administre combustível, manutenção, pedágios e demais custos da operação.</p></article>
+    <article><b>03</b><h3>Autônomo</h3><p>Escolha fretes de diferentes empresas, tenha liberdade de rota e fique com a parcela definida da receita. Você decide onde trabalhar e assume a gestão completa do seu caminhão.</p></article>
+    <article><b>04</b><h3>Empresário</h3><p>Abra sedes, monte sua frota, contrate motoristas e acompanhe entregas fictícias que geram receita. Transforme uma carreira individual em uma operação logística completa.</p></article>
+  </div>
+</section>
+<section class="section muted feature-catalog">
+  <div class="feature-catalog-head"><div><span class="eyebrow">Tudo conectado</span><h2>As ferramentas que fazem cada quilômetro valer a pena.</h2></div><p>O aplicativo acompanha o jogo e organiza as decisões que normalmente ficam fora da cabine. Você joga; o RoadLedger cuida da história financeira por trás da viagem.</p></div>
+  <div class="feature-detail-grid">
+    <article class="feature-detail"><span>€</span><div><h3>Economia integrada ao save</h3><p>Defina seu saldo, sincronize quando desejar e leve a economia do aplicativo para o perfil do jogo. O controle fica nas suas mãos, sem depender de sincronização constante.</p></div></article>
+    <article class="feature-detail"><span>▦</span><div><h3>Banco virtual e extrato</h3><p>Abra sua conta digital, acompanhe entradas e saídas e construa relacionamento com o banco. Seu histórico influencia análises de crédito e as condições oferecidas.</p></div></article>
+    <article class="feature-detail"><span>▣</span><div><h3>Financiamento e compra de caminhões</h3><p>Informe marca, modelo, condição, valor e entrada. O banco analisa a proposta imediatamente. Depois da compra, registre o veículo com segurança e acompanhe tudo na frota.</p></div></article>
+    <article class="feature-detail"><span>✓</span><div><h3>Contratos que realmente importam</h3><p>Compare propostas, salários, comissões, duração, limites de velocidade e cláusulas. Desempenho, danos e quebras de contrato influenciam a continuidade na empresa.</p></div></article>
+    <article class="feature-detail"><span>↗</span><div><h3>Reputação e novas oportunidades</h3><p>Entregas bem-feitas fortalecem sua imagem profissional e abrem propostas melhores. Infrações de regras geram advertências e podem comprometer a renovação do contrato.</p></div></article>
+    <article class="feature-detail"><span>⌁</span><div><h3>Entregas e remuneração</h3><p>Veja origem, destino, carga, valor bruto e quanto você realmente receberá conforme sua modalidade. Apenas as viagens registradas pelo aplicativo entram nos cálculos.</p></div></article>
+    <article class="feature-detail"><span>◷</span><div><h3>Tacógrafo semanal</h3><p>Acompanhe visualmente o tempo dirigido e o saldo da jornada semanal de 44 horas. O cálculo considera o período em que o caminhão está efetivamente em movimento.</p></div></article>
+    <article class="feature-detail"><span>!</span><div><h3>Carteira e infrações</h3><p>Multas retiram pontos da carteira e ficam registradas no histórico. Se precisar, faça a reciclagem antecipadamente e preserve sua regularidade profissional.</p></div></article>
+    <article class="feature-detail"><span>≡</span><div><h3>Financeiro completo</h3><p>Acompanhe salário, comissões, contracheques, despesas manuais e boletos abertos ou pagos. Vencimentos e atrasos trazem efeitos reais para seu planejamento.</p></div></article>
+    <article class="feature-detail"><span>▰</span><div><h3>Frota e patrimônio</h3><p>Consulte marca, modelo, condição, quilometragem, compra e situação dos veículos. Quando chegar a hora de renovar, venda o caminhão e recupere parte do investimento.</p></div></article>
+    <article class="feature-detail"><span>♟</span><div><h3>Gestão de funcionários</h3><p>Vincule motoristas, caminhões e sedes. Cada funcionário recebe rotas coerentes com sua localização, gera receita para a empresa e para quando o veículo está em manutenção.</p></div></article>
+    <article class="feature-detail"><span>◎</span><div><h3>ETS2 e ATS no mesmo aplicativo</h3><p>Configure os dois jogos uma única vez. O RoadLedger mantém carreiras, saves e preferências separados para evitar conflitos entre seus perfis.</p></div></article>
+  </div>
+</section>
+<section class="section feature-promise"><img src="{% static 'img/secure-membership.png' %}" alt="Proteção e acesso ao RoadLedger"><div><span class="eyebrow">Profundidade sem complicação</span><h2>Mais decisões. Mais conquistas. Mais motivos para voltar à estrada.</h2><p>Você não precisa transformar o jogo em trabalho. O RoadLedger foi pensado para adicionar propósito e progressão sem tornar a experiência excessivamente difícil. As informações importantes ficam organizadas e as ações continuam claras.</p><ul><li>Sincronização feita por você, no momento certo.</li><li>Perfis independentes para ETS2 e ATS.</li><li>Histórico financeiro e profissional em um só lugar.</li><li>Progressão do primeiro emprego à gestão empresarial.</li></ul></div></section>
+<section class="cta feature-cta"><img src="{% static 'img/roadledger-logo.png' %}" alt="RoadLedger"><span class="eyebrow">A próxima entrega pode ser o começo de algo maior</span><h2>Pronto para escrever sua história na estrada?</h2><p>Crie sua conta e transforme cada frete em uma decisão de carreira.</p><div class="actions"><a class="button" href="{% url 'accounts:register' %}">Criar minha conta</a><a class="button ghost" href="{% url 'subscriptions:plans' %}">Conhecer os planos</a></div></section>
+{% endblock %}

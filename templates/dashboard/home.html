@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Minha conta · RoadLedger{% endblock %}
+{% block content %}
+<section class="page-head dashboard-head"><div><span class="eyebrow">Área do cliente</span><h1>Olá, {{ user.full_name }}.</h1></div><a class="button ghost" href="{% url 'accounts:profile' %}">Editar perfil</a></section>
+<section class="section dashboard-grid">
+  <article class="panel span2"><h2>Seu acesso</h2>
+    {% if user.lifetime_access %}<span class="status active">Vitalício</span><h3>RoadLedger sem prazo de expiração</h3><p>Seu acesso permanente foi liberado pela equipe RoadLedger.</p><a class="button" href="{% url 'downloads:index' %}">Baixar RoadLedger</a>
+    {% elif subscription %}<span class="status {{ subscription.status }}">{{ subscription.get_status_display }}</span><h3>{{ subscription.plan.name }}</h3><p>Próxima renovação: {{ subscription.current_period_end|date:'d/m/Y'|default:'aguardando confirmação' }}</p>{% if subscription.grants_access %}<a class="button" href="{% url 'downloads:index' %}">Baixar RoadLedger</a>{% endif %}<form method="post" action="{% url 'subscriptions:cancel' %}">{% csrf_token %}<button class="link-btn">Cancelar no fim do período</button></form>
+    {% else %}<p>Você ainda não possui uma assinatura ativa.</p><a class="button" href="{% url 'subscriptions:plans' %}">Ver planos</a>{% endif %}
+  </article>
+  <article class="panel"><h2>Autorizar computador</h2><form method="post" action="{% url 'licenses:approve_device' %}">{% csrf_token %}<label>Código exibido no app<input name="code" placeholder="ABCD-EF12" required></label><button class="button small">Autorizar</button></form></article>
+  <article class="panel"><h2>Token de integração</h2><p>Use apenas se o aplicativo solicitar.</p><form method="post" action="{% url 'licenses:create_token' %}">{% csrf_token %}<button class="button ghost small">Gerar token</button></form></article>
+  <article class="panel span2"><h2>Dispositivos</h2>{% for device in devices %}<div class="list-row"><div><strong>{{ device.name }}</strong><small>{{ device.platform }} · visto {{ device.last_seen_at|date:'d/m/Y H:i' }}</small></div><form method="post" action="{% url 'licenses:revoke_device' device.pk %}">{% csrf_token %}<button class="link-btn danger-text">Revogar</button></form></div>{% empty %}<p>Nenhum dispositivo autorizado.</p>{% endfor %}</article>
+  <article class="panel"><h2>Ajuda</h2><p>Abra e acompanhe chamados.</p><a href="{% url 'support:index' %}">Ir para o suporte →</a></article>
+</section>
+{% endblock %}

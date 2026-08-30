@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block title %}Autorizar computador · RoadLedger{% endblock %}
+{% block content %}
+<section class="auth device-activation">
+  <div class="panel">
+    <span class="eyebrow">Ligação com o aplicativo</span>
+    {% if approved %}
+      <h1>Computador autorizado.</h1>
+      <p>Volte ao RoadLedger e clique em <strong>“Já autorizei, verificar”</strong>. Você já pode fechar esta página.</p>
+    {% else %}
+      <h1>Autorizar computador</h1>
+      <p>Confira se o código abaixo é igual ao exibido no aplicativo. A autorização será vinculada à sua conta.</p>
+      <form method="post">{% csrf_token %}<label>Código de autorização<input name="code" value="{{ code }}" placeholder="ABCD-1234" maxlength="12" required autofocus></label><button class="button" type="submit">Autorizar este computador</button></form>
+      <p class="fineprint">Nunca autorize um código que você não solicitou no seu próprio computador.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends 'base.html' %}{% load static %}{% block content %}
+<section class="hero brand-hero">
+  <div class="hero-copy"><span class="eyebrow">Sua operação, sua estrada</span><h1>Transforme cada entrega em uma carreira de verdade.</h1><p>Controle economia, contratos, banco, frota e empresa em uma experiência complementar para Euro Truck Simulator 2 e American Truck Simulator.</p><div class="actions"><a class="button" href="{% url 'accounts:register' %}">Começar agora</a><a class="button ghost" href="{% url 'core:how' %}">Ver como funciona</a></div><div class="trust"><span>✓ ETS2 e ATS</span><span>✓ Perfis separados</span><span>✓ Download protegido</span></div></div>
+  <div class="hero-art"><img src="{% static 'img/hero-roadledger.png' %}" alt="Caminhão RoadLedger avançando por uma estrada financeira"></div>
+</section>
+<section class="brand-intro section">
+  <div class="brand-intro-logo"><img src="{% static 'img/roadledger-logo.png' %}" alt="Símbolo RoadLedger"></div>
+  <div><span class="eyebrow">Estrada e resultado no mesmo painel</span><h2>Uma identidade feita para quem administra cada quilômetro.</h2><p>O RoadLedger une a força da estrada com a clareza das finanças. Azul para confiança, verde para progresso e dourado para cada conquista da sua carreira.</p></div>
+</section>
+<section class="section feature-section">
+  <div class="section-heading"><div><span class="eyebrow">Recursos</span><h2>Mais profundidade, sem complicar sua viagem.</h2></div><img src="{% static 'img/feature-command-center.png' %}" alt="Central financeira e logística RoadLedger"></div>
+  <div class="grid three">{% for item in features %}<article class="card"><h3>{{ item.title }}</h3><p>{{ item.description }}</p></article>{% empty %}<p>Execute o comando de dados iniciais para publicar os recursos.</p>{% endfor %}</div>
+</section>
+<section class="section muted plans-brand">
+  <div class="plans-heading"><div><span class="eyebrow">Planos</span><h2>Escolha seu ritmo.</h2><p>Conta protegida, licença segura e atualizações para continuar evoluindo.</p></div><img src="{% static 'img/secure-membership.png' %}" alt="Assinatura segura do RoadLedger"></div>
+  <div class="grid three">{% for plan in plans %}<article class="price-card {% if plan.featured %}featured{% endif %}">{% if plan.founder %}<span class="badge">100 vagas</span>{% endif %}<h3>{{ plan.name }}</h3><p>{{ plan.description }}</p><strong>R$ {{ plan.price }}<small>/{{ plan.get_interval_display|lower }}</small></strong><a class="button" href="{% url 'subscriptions:checkout' plan.code %}">Assinar</a></article>{% endfor %}</div>
+</section>
+<section class="cta"><img src="{% static 'img/roadledger-logo.png' %}" alt="" aria-hidden="true"><h2>Pronto para escrever sua história na estrada?</h2><p>Crie sua conta e prepare o RoadLedger para a próxima viagem.</p><a class="button" href="{% url 'accounts:register' %}">Criar conta</a></section>
+{% endblock %}

@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<section class="auth"><div class="panel"><h1>Token criado</h1><p>Copie agora. Por segurança, ele não será mostrado novamente.</p><code class="token">{{ token }}</code><a class="button" href="{% url 'dashboard:home' %}">Voltar ao painel</a></div></section>{% endblock %}

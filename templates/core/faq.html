@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<section class="page-head"><span class="eyebrow">FAQ</span><h1>Perguntas frequentes.</h1></section><section class="section narrow">{% for item in faqs %}<details><summary>{{ item.question }}</summary><p>{{ item.answer }}</p></details>{% endfor %}</section>{% endblock %}
