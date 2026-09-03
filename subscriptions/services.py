@@ -1,5 +1,6 @@
-from django.db import transaction
 from urllib.parse import urlparse
+
+from django.db import transaction
 
 from .models import Plan, Subscription
 
@@ -24,8 +25,13 @@ def begin_or_resume_payment(subscription, client=None):
     """Return the provider checkout URL without duplicating an existing preapproval."""
     if subscription.status != "pending":
         raise ValueError("Esta assinatura não está aguardando pagamento.")
-    if subscription.provider_checkout_url:
+    if subscription.provider != "mercado_pago_pix" and subscription.provider_checkout_url:
         return subscription.provider_checkout_url
+
+    if subscription.provider == "mercado_pago_pix":
+        subscription.provider = "mercado_pago"
+        subscription.provider_subscription_id = ""
+        subscription.provider_checkout_url = ""
 
     if client is None:
         from payments.services import MercadoPagoClient
@@ -51,4 +57,36 @@ def begin_or_resume_payment(subscription, client=None):
     )
     subscription.provider_checkout_url = checkout_url
     subscription.save(update_fields=["provider_subscription_id", "provider_checkout_url"])
+    return checkout_url
+
+
+def begin_or_resume_pix_payment(subscription, client=None):
+    """Open a Pix-only Checkout Pro preference for one plan period."""
+    if subscription.status != "pending":
+        raise ValueError("Esta assinatura não está aguardando pagamento.")
+    if subscription.provider == "mercado_pago_pix" and subscription.provider_checkout_url:
+        return subscription.provider_checkout_url
+    if client is None:
+        from payments.services import MercadoPagoClient
+
+        client = MercadoPagoClient()
+    if subscription.provider_subscription_id:
+        client.cancel_subscription(subscription.provider_subscription_id)
+    response = client.create_pix_preference(subscription)
+    checkout_url = response.get("init_point") or response.get("sandbox_init_point")
+    parsed = urlparse(checkout_url or "")
+    allowed_hosts = {
+        "www.mercadopago.com",
+        "www.mercadopago.com.br",
+        "mercadopago.com",
+        "mercadopago.com.br",
+    }
+    if parsed.scheme != "https" or parsed.hostname not in allowed_hosts:
+        raise RuntimeError("O Mercado Pago não retornou um endereço PIX válido.")
+    subscription.provider = "mercado_pago_pix"
+    subscription.provider_subscription_id = str(response.get("id", ""))
+    subscription.provider_checkout_url = checkout_url
+    subscription.save(update_fields=[
+        "provider", "provider_subscription_id", "provider_checkout_url",
+    ])
     return checkout_url

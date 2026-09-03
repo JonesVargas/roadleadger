@@ -2,11 +2,16 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-
 from django.views.decorators.http import require_POST
 
 from .models import Plan
-from .services import begin_or_resume_payment, reserve_subscription
+from .services import begin_or_resume_payment, begin_or_resume_pix_payment, reserve_subscription
+
+
+def _payment_url(subscription, method):
+    if method == "pix":
+        return begin_or_resume_pix_payment(subscription)
+    return begin_or_resume_payment(subscription)
 
 
 def plans(request):
@@ -19,7 +24,7 @@ def checkout(request, code):
     if request.method == "POST":
         try:
             sub = reserve_subscription(request.user, plan)
-            return redirect(begin_or_resume_payment(sub))
+            return redirect(_payment_url(sub, request.POST.get("payment_method")))
         except Exception as exc:
             messages.error(request, str(exc))
     return render(request, "subscriptions/checkout.html", {"plan": plan})
@@ -33,7 +38,7 @@ def resume_payment(request):
         messages.error(request, "Nenhuma assinatura pendente foi encontrada.")
         return redirect("dashboard:home")
     try:
-        return redirect(begin_or_resume_payment(subscription))
+        return redirect(_payment_url(subscription, request.POST.get("payment_method")))
     except Exception as error:
         messages.error(request, str(error))
         return redirect(reverse("dashboard:home") + "?section=pagamentos")

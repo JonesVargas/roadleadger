@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -6,7 +6,7 @@ from django.urls import reverse
 from accounts.models import User
 
 from .models import Plan, Subscription
-from .services import begin_or_resume_payment, reserve_subscription
+from .services import begin_or_resume_payment, begin_or_resume_pix_payment, reserve_subscription
 
 
 class FounderPlanTests(TestCase):
@@ -64,3 +64,39 @@ class PendingPaymentTests(TestCase):
             self.subscription.provider_checkout_url,
             fetch_redirect_response=False,
         )
+
+    def test_pix_checkout_cancels_old_recurring_checkout_and_is_reused(self):
+        self.subscription.provider_subscription_id = "preapproval-old"
+        self.subscription.provider_checkout_url = "https://www.mercadopago.com.br/old"
+        self.subscription.save(update_fields=[
+            "provider_subscription_id", "provider_checkout_url",
+        ])
+        client = Mock()
+        client.create_pix_preference.return_value = {
+            "id": "pix-preference-1",
+            "init_point": "https://www.mercadopago.com.br/checkout/v1/redirect",
+        }
+
+        url = begin_or_resume_pix_payment(self.subscription, client)
+        self.subscription.refresh_from_db()
+
+        client.cancel_subscription.assert_called_once_with("preapproval-old")
+        self.assertEqual(self.subscription.provider, "mercado_pago_pix")
+        self.assertEqual(self.subscription.provider_subscription_id, "pix-preference-1")
+        self.assertEqual(url, self.subscription.provider_checkout_url)
+        self.assertEqual(begin_or_resume_pix_payment(self.subscription, client), url)
+        client.create_pix_preference.assert_called_once()
+
+    def test_customer_can_choose_pix_from_pending_payment(self):
+        self.client.force_login(self.user)
+        with patch(
+            "subscriptions.views.begin_or_resume_pix_payment",
+            return_value="https://www.mercadopago.com.br/pix",
+        ) as starter:
+            response = self.client.post(
+                reverse("subscriptions:resume_payment"), {"payment_method": "pix"}
+            )
+        self.assertRedirects(
+            response, "https://www.mercadopago.com.br/pix", fetch_redirect_response=False
+        )
+        starter.assert_called_once()

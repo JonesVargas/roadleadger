@@ -1,1 +1,16 @@
-{% extends 'base.html' %}{% block content %}<section class="auth"><form method="post" class="panel"><span class="eyebrow">Checkout seguro</span><h1>{{ plan.name }}</h1><p>{{ plan.description }}</p><div class="checkout-price">R$ {{ plan.price }} / {{ plan.get_interval_display|lower }}</div><p class="fineprint">Você será encaminhado ao Mercado Pago. O acesso será liberado somente após a confirmação oficial do pagamento.</p>{% csrf_token %}<button class="button">Continuar para o Mercado Pago</button></form></section>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<section class="auth">
+  <form method="post" class="panel">
+    <span class="eyebrow">Checkout seguro</span>
+    <h1>{{ plan.name }}</h1>
+    <p>{{ plan.description }}</p>
+    <div class="checkout-price">R$ {{ plan.price }} / {{ plan.get_interval_display|lower }}</div>
+    <p class="fineprint">Escolha como deseja pagar. O acesso será liberado somente após a confirmação oficial do Mercado Pago.</p>
+    {% csrf_token %}
+    <button class="button" name="payment_method" value="pix">Pagar com PIX</button>
+    <button class="button ghost" name="payment_method" value="recurring">Assinar com cartão</button>
+    <p class="fineprint">PIX libera um período e exige renovação manual. O cartão permite renovação automática.</p>
+  </form>
+</section>
+{% endblock %}

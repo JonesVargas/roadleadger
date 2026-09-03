@@ -11,7 +11,7 @@ from subscriptions.models import Plan, Subscription
 
 from .credentials import encrypt_secret
 from .models import PaymentProviderConfig, WebhookEvent
-from .services import MercadoPagoClient
+from .services import MercadoPagoClient, apply_provider_payment
 
 
 class MercadoPagoCheckoutTests(TestCase):
@@ -32,6 +32,45 @@ class MercadoPagoCheckoutTests(TestCase):
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["status"], "pending")
         self.assertNotIn("card_token_id", payload)
+
+    @patch("payments.services.requests.post")
+    @patch("payments.services.get_mercado_pago_credentials")
+    def test_pix_preference_selects_pix_and_excludes_cards(self, credentials, post):
+        credentials.return_value.access_token = "token"
+        post.return_value.raise_for_status.return_value = None
+        post.return_value.json.return_value = {"id": "pix-1", "init_point": "https://x"}
+        user = User.objects.create_user("pix-choice@example.com", "x", full_name="Pix")
+        plan = Plan.objects.create(code="pix-choice", name="PIX", price=9.9, interval="month")
+        subscription = Subscription.objects.create(user=user, plan=plan)
+
+        MercadoPagoClient().create_pix_preference(subscription)
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["payment_methods"]["default_payment_method_id"], "pix")
+        excluded = {item["id"] for item in payload["payment_methods"]["excluded_payment_types"]}
+        self.assertEqual(excluded, {"credit_card", "debit_card", "ticket"})
+
+    def test_approved_pix_activates_exactly_one_plan_period(self):
+        user = User.objects.create_user("approved-pix@example.com", "x", full_name="Pix")
+        plan = Plan.objects.create(code="pix-paid", name="PIX", price=9.9, interval="month")
+        subscription = Subscription.objects.create(user=user, plan=plan)
+        payload = {
+            "id": "payment-pix-1",
+            "status": "approved",
+            "payment_method_id": "pix",
+            "transaction_amount": "9.90",
+            "currency_id": "BRL",
+            "date_approved": "2026-09-03T12:00:00+00:00",
+            "external_reference": f"roadledger-subscription-{subscription.pk}",
+            "metadata": {"subscription_id": subscription.pk, "payment_mode": "pix"},
+        }
+
+        apply_provider_payment(payload)
+        subscription.refresh_from_db()
+
+        self.assertEqual(subscription.status, "active")
+        self.assertEqual(subscription.provider, "mercado_pago_pix")
+        self.assertEqual((subscription.current_period_end - subscription.current_period_start).days, 30)
 
 
 class WebhookTests(TestCase):

@@ -1,5 +1,7 @@
 import hashlib
 import hmac
+from datetime import timedelta
+from decimal import Decimal
 
 import requests
 from django.conf import settings
@@ -55,6 +57,55 @@ class MercadoPagoClient:
         response.raise_for_status()
         return response.json()
 
+    def cancel_subscription(self, resource_id):
+        response = requests.put(
+            f"{self.base}/preapproval/{resource_id}",
+            json={"status": "cancelled"},
+            headers=self._headers(),
+            timeout=20,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def create_pix_preference(self, subscription):
+        if not self.token:
+            raise RuntimeError("Configure o Access Token do Mercado Pago no painel administrativo.")
+        return_url = f"{settings.SITE_URL}/painel/?section=pagamentos"
+        payload = {
+            "items": [{
+                "id": f"roadledger-plan-{subscription.plan.code}",
+                "title": f"RoadLedger - {subscription.plan.name}",
+                "description": "Acesso ao RoadLedger pelo período contratado",
+                "quantity": 1,
+                "currency_id": "BRL",
+                "unit_price": float(subscription.plan.price),
+            }],
+            "payer": {"email": subscription.user.email},
+            "external_reference": f"roadledger-subscription-{subscription.pk}",
+            "metadata": {"subscription_id": subscription.pk, "payment_mode": "pix"},
+            "payment_methods": {
+                "default_payment_method_id": "pix",
+                "excluded_payment_types": [
+                    {"id": "credit_card"},
+                    {"id": "debit_card"},
+                    {"id": "ticket"},
+                ],
+            },
+            "back_urls": {
+                "success": return_url,
+                "pending": return_url,
+                "failure": return_url,
+            },
+            "auto_return": "approved",
+            "notification_url": settings.MP_WEBHOOK_URL,
+        }
+        response = requests.post(
+            f"{self.base}/checkout/preferences", json=payload,
+            headers=self._headers(), timeout=20,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def get_payment(self, resource_id):
         response = requests.get(f"{self.base}/v1/payments/{resource_id}", headers=self._headers(), timeout=20)
         response.raise_for_status()
@@ -101,6 +152,64 @@ def apply_provider_subscription(payload, source="webhook"):
     return sub
 
 
+def _pix_subscription(payload):
+    metadata = payload.get("metadata") or {}
+    internal_id = metadata.get("subscription_id")
+    if not internal_id:
+        reference = str(payload.get("external_reference") or "")
+        prefix = "roadledger-subscription-"
+        internal_id = reference.removeprefix(prefix) if reference.startswith(prefix) else None
+    return Subscription.objects.select_for_update().filter(pk=internal_id).first()
+
+
+@transaction.atomic
+def apply_provider_payment(payload, source="webhook"):
+    metadata = payload.get("metadata") or {}
+    preapproval_id = str(metadata.get("preapproval_id") or "")
+    sub = (
+        _pix_subscription(payload)
+        or Subscription.objects.select_for_update()
+        .filter(provider_subscription_id=preapproval_id)
+        .first()
+    )
+    if not sub:
+        return None
+    amount = payload.get("transaction_amount", 0)
+    status = payload.get("status", "unknown")
+    paid_at = parse_datetime(payload.get("date_approved", ""))
+    Payment.objects.update_or_create(
+        provider_payment_id=str(payload["id"]),
+        defaults={
+            "subscription": sub,
+            "amount": amount,
+            "status": status,
+            "paid_at": paid_at,
+            "raw": payload,
+        },
+    )
+    is_pix = metadata.get("payment_mode") == "pix" or str(
+        payload.get("payment_method_id", "")
+    ).lower() == "pix"
+    if not is_pix or status != "approved":
+        return sub
+    if payload.get("currency_id") != "BRL" or Decimal(str(amount)) != sub.plan.price:
+        return sub
+    old = sub.status
+    started = paid_at or timezone.now()
+    days = 365 if sub.plan.interval == "year" else 30
+    sub.status = "active"
+    sub.provider = "mercado_pago_pix"
+    sub.current_period_start = started
+    sub.current_period_end = started + timedelta(days=days * sub.plan.interval_count)
+    sub.save()
+    if old != sub.status:
+        SubscriptionHistory.objects.create(
+            subscription=sub, old_status=old, new_status=sub.status,
+            source=source, payload=payload,
+        )
+    return sub
+
+
 def process_webhook(event, client=None):
     client = client or MercadoPagoClient()
     payload = (
@@ -111,19 +220,6 @@ def process_webhook(event, client=None):
     if event.topic in {"subscription_preapproval", "preapproval"}:
         apply_provider_subscription(payload)
     else:
-        sub = Subscription.objects.filter(
-            provider_subscription_id=str(payload.get("metadata", {}).get("preapproval_id", ""))
-        ).first()
-        if sub:
-            Payment.objects.update_or_create(
-                provider_payment_id=str(payload["id"]),
-                defaults={
-                    "subscription": sub,
-                    "amount": payload.get("transaction_amount", 0),
-                    "status": payload.get("status", "unknown"),
-                    "paid_at": parse_datetime(payload.get("date_approved", "")),
-                    "raw": payload,
-                },
-            )
+        apply_provider_payment(payload)
     event.processed_at = timezone.now()
     event.save(update_fields=["processed_at"])
