@@ -2,8 +2,8 @@ from django.contrib.auth.models import Group
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from core.models import FAQ, Feature, LegalPage, ServiceStatus, UpdatePost
 from core.legal_content import LEGAL_VERSION, PRIVACY_PT_BR, TERMS_PT_BR
+from core.models import FAQ, Feature, LegalPage, ServiceStatus, UpdatePost
 from subscriptions.models import Plan
 
 
@@ -23,7 +23,7 @@ class Command(BaseCommand):
             "Atualizações e suporte",
         ]
         for code, name, price, interval, founder, limit, featured in plans:
-            Plan.objects.update_or_create(
+            Plan.objects.get_or_create(
                 code=code,
                 defaults={
                     "name": name,
@@ -46,7 +46,7 @@ class Command(BaseCommand):
             ("Telemetria", "Use dados do jogo para enriquecer sua operação."),
         ]
         for i, (title, description) in enumerate(features):
-            Feature.objects.update_or_create(
+            Feature.objects.get_or_create(
                 title=title, defaults={"description": description, "order": i, "active": True}
             )
         faqs = [
@@ -65,18 +65,18 @@ class Command(BaseCommand):
             ),
         ]
         for i, (q, a) in enumerate(faqs):
-            FAQ.objects.update_or_create(question=q, defaults={"answer": a, "order": i, "active": True})
-        LegalPage.objects.update_or_create(
+            FAQ.objects.get_or_create(question=q, defaults={"answer": a, "order": i, "active": True})
+        LegalPage.objects.get_or_create(
             kind="terms", defaults={"version": LEGAL_VERSION, "body": TERMS_PT_BR}
         )
-        LegalPage.objects.update_or_create(
+        LegalPage.objects.get_or_create(
             kind="privacy", defaults={"version": LEGAL_VERSION, "body": PRIVACY_PT_BR}
         )
         for name in ["Site", "API de licenciamento", "Downloads", "Pagamentos"]:
-            ServiceStatus.objects.update_or_create(
+            ServiceStatus.objects.get_or_create(
                 name=name, defaults={"status": "operational", "message": "Operação normal."}
             )
-        UpdatePost.objects.update_or_create(
+        UpdatePost.objects.get_or_create(
             slug="roadledger-site-em-preparacao",
             defaults={
                 "title": "RoadLedger Site em preparação",

@@ -11,6 +11,27 @@ from subscriptions.models import Plan, Subscription
 
 from .credentials import encrypt_secret
 from .models import PaymentProviderConfig, WebhookEvent
+from .services import MercadoPagoClient
+
+
+class MercadoPagoCheckoutTests(TestCase):
+    @patch("payments.services.requests.post")
+    @patch("payments.services.get_mercado_pago_credentials")
+    def test_subscription_is_created_pending_to_offer_pix(self, credentials, post):
+        credentials.return_value.access_token = "token"
+        post.return_value.raise_for_status.return_value = None
+        post.return_value.json.return_value = {
+            "id": "pre-1", "init_point": "https://www.mercadopago.com.br/checkout"
+        }
+        user = User.objects.create_user("pix@example.com", "x", full_name="Pix")
+        plan = Plan.objects.create(code="pix", name="PIX", price=9.9, interval="month")
+        subscription = Subscription.objects.create(user=user, plan=plan)
+
+        MercadoPagoClient().create_subscription(subscription)
+
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["status"], "pending")
+        self.assertNotIn("card_token_id", payload)
 
 
 class WebhookTests(TestCase):

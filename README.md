@@ -30,7 +30,7 @@ Instaladores ficam no storage configurado. No primeiro deploy do Railway, monte 
 6. Configure o healthcheck do serviço como `/api/v1/health/`, com timeout de 300 segundos.
 7. Após o primeiro deploy, execute `python manage.py createsuperuser` uma única vez pelo terminal do serviço.
 
-O `Dockerfile` coleta os arquivos estáticos na construção e, ao iniciar, executa as migrações, garante os dados iniciais e sobe o Gunicorn. O `railway.json` permanece apenas como referência para serviços legados; novos serviços do Railway devem usar o `Dockerfile` e as opções do painel. O deploy não foi executado.
+O `Dockerfile` coleta os arquivos estáticos na construção e, ao iniciar, executa somente as migrações antes de subir o Gunicorn. O comando `seed_roadledger` deve ser executado manualmente apenas na primeira instalação; deploys posteriores nunca sobrescrevem planos, recursos ou textos administrados no site. O `railway.json` permanece como referência para serviços legados. O deploy não foi executado.
 
 Use `.env.production.example` como checklist. Gere valores longos e independentes para `SECRET_KEY` e `PAYMENT_CREDENTIALS_KEY`; não troque a segunda depois de cadastrar credenciais, pois ela é necessária para descriptografá-las. Antes da venda: configure SMTP real, credenciais do Mercado Pago, domínio/HTTPS, backups e revisão jurídica. Comece com HSTS de 3600 segundos e aumente somente depois de confirmar que domínio e subdomínios funcionam integralmente por HTTPS.
 

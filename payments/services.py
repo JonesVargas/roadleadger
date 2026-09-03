@@ -38,6 +38,9 @@ class MercadoPagoClient:
             },
             "back_url": f"{settings.SITE_URL}/painel/",
             "notification_url": settings.MP_WEBHOOK_URL,
+            # Mantém o meio de pagamento em aberto para o checkout oferecer
+            # todas as opções habilitadas na conta, incluindo Pix no Brasil.
+            "status": "pending",
         }
         if subscription.plan.interval == "year":
             payload["auto_recurring"]["frequency"] = 12

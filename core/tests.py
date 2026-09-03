@@ -1,7 +1,23 @@
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
+from subscriptions.models import Plan
+
 from .models import SocialLink
+
+
+class InitialDataTests(TestCase):
+    def test_seed_does_not_overwrite_values_saved_in_manager(self):
+        Plan.objects.create(
+            code="mensal", name="Plano personalizado", price="27.90", interval="month"
+        )
+
+        call_command("seed_roadledger")
+
+        plan = Plan.objects.get(code="mensal")
+        self.assertEqual(plan.name, "Plano personalizado")
+        self.assertEqual(str(plan.price), "27.90")
 
 
 class SocialLinksTests(TestCase):

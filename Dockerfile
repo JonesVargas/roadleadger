@@ -15,4 +15,4 @@ COPY . .
 RUN SECRET_KEY=build-only-secret-key-not-used-at-runtime DEBUG=False ALLOWED_HOSTS=localhost \
     python manage.py collectstatic --noinput
 
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py seed_roadledger && exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120"]
