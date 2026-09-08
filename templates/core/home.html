@@ -33,6 +33,15 @@
     <small>Acumulado geral. Viagens em andamento e canceladas não entram no ranking.</small>
   </article>
 </section>
+<section class="section" aria-labelledby="driver-ranking-title"><article class="card">
+<h2 id="driver-ranking-title">Ranking dos motoristas</h2>
+<p>Mais entregas concluídas, com desempate pela quilometragem. Fretes por conta própria e por empresas contam para o motorista.</p>
+{% if driver_ranking %}<div style="overflow-x:auto" tabindex="0" role="region" aria-label="Ranking dos motoristas"><table style="width:100%;text-align:left">
+<thead><tr><th scope="col">Posição</th><th scope="col">Motorista / ID</th><th scope="col">Entregas</th><th scope="col">Quilômetros</th><th scope="col">Propostas</th></tr></thead>
+<tbody>{% for driver in driver_ranking %}<tr><td>{{ forloop.counter }}º</td><th scope="row">{{ driver.name }}<br><small>{{ driver.id }}</small></th><td>{{ driver.deliveries }}</td><td>{{ driver.kilometers|floatformat:"1g" }} km</td><td>{% if driver.open_to_offers %}Aberto a propostas{% else %}Indisponível{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<p>Os motoristas aparecerão após sincronizar suas primeiras entregas.</p>{% endif %}
+<small>Localize os jogadores disponíveis pelo nome ou ID. A contratação depende do aceite do jogador.</small>
+</article></section>
 <section class="section muted plans-brand">
   <div class="plans-heading"><div><span class="eyebrow">Planos</span><h2>Escolha seu ritmo.</h2><p>Conta protegida, licença segura e atualizações para continuar evoluindo.</p></div><img src="{% static 'img/secure-membership.png' %}" alt="Assinatura segura do RoadLedger"></div>
   <div class="grid three">{% for plan in plans %}<article class="price-card {% if plan.featured %}featured{% endif %}">{% if plan.founder %}<span class="badge">100 vagas</span>{% endif %}<h3>{{ plan.name }}</h3><p>{{ plan.description }}</p><strong>R$ {{ plan.price }}<small>/{{ plan.get_interval_display|lower }}</small></strong><a class="button" href="{% url 'subscriptions:checkout' plan.code %}">Assinar</a></article>{% endfor %}</div>

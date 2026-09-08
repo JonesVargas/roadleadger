@@ -1,10 +1,16 @@
-from . import company_api
+from . import company_api, recruitment, autonomous
 from django.urls import path
 
 from . import views
 
 app_name = "api"
 urlpatterns = [
+    path("v1/my/autonomous-deliveries/", autonomous.upload),
+    path("v1/my/recruitment-profile/", recruitment.profile),
+    path("v1/my/job-offers/", recruitment.inbox),
+    path("v1/my/job-offers/<uuid:offer_id>/respond/", recruitment.respond),
+    path("v1/companies/<uuid:company_id>/players/", recruitment.players),
+    path("v1/companies/<uuid:company_id>/job-offers/", recruitment.send),
     path("v1/companies/", company_api.companies),
     path("v1/companies/<uuid:company_id>/rules/", company_api.rules),
     path("v1/companies/<uuid:company_id>/freights/", company_api.company_freights),

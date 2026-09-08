@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from .authentication import HashedTokenAuthentication
 from .models import VirtualCompany, Vacancy, Candidacy, EmployeeContract, FreightEvent, OnlineFreight, CompanyAction
 
-DEFAULT_RULES = {"speed_limit": 90, "speed_reputation_loss": 5, "fine_reputation_loss": 5, "fine_license_points": 7}
+DEFAULT_RULES = {"damage_limit": 5, "damage_discount_percent": 10, "speed_limit": 90, "speed_reputation_loss": 5, "fine_reputation_loss": 5, "fine_license_points": 7}
 
 
 def endpoint(methods):
@@ -119,12 +119,16 @@ def contracts(request):
 def accept(request, contract_id):
     if request.data.get("accepted") is not True:
         raise serializers.ValidationError("Aceite os termos para assinar.")
+    return Response(sign_contract(request.user, contract_id))
+
+
+def sign_contract(user, contract_id):
     with transaction.atomic():
         # Serialize two simultaneous contracts signed by the same account.
-        type(request.user).objects.select_for_update().get(pk=request.user.pk)
-        contract = get_object_or_404(EmployeeContract.objects.select_for_update().select_related("candidacy__vacancy"), pk=contract_id, candidacy__player=request.user)
+        type(user).objects.select_for_update().get(pk=user.pk)
+        contract = get_object_or_404(EmployeeContract.objects.select_for_update().select_related("candidacy__vacancy"), pk=contract_id, candidacy__player=user)
         company = VirtualCompany.objects.select_for_update().get(pk=contract.candidacy.vacancy.company_id)
-        if contract.signed_at or contract.ended_at or EmployeeContract.objects.filter(candidacy__player=request.user, signed_at__isnull=False, ended_at__isnull=True).exists():
+        if contract.signed_at or contract.ended_at or EmployeeContract.objects.filter(candidacy__player=user, signed_at__isnull=False, ended_at__isnull=True).exists():
             raise serializers.ValidationError("Contrato indisponível ou vínculo já ativo.")
         active = EmployeeContract.objects.filter(candidacy__vacancy__company=company, signed_at__isnull=False, ended_at__isnull=True)
         vacancy = contract.candidacy.vacancy
@@ -134,8 +138,8 @@ def accept(request, contract_id):
         contract.save(update_fields=["signed_at"])
         contract.candidacy.status = "hired"
         contract.candidacy.save(update_fields=["status"])
-        audit(company, request.user, "contract_signed", contract.id)
-    return Response({"status": "signed"})
+        audit(company, user, "contract_signed", contract.id)
+    return {"status": "signed"}
 
 
 @endpoint(["POST"])
@@ -166,6 +170,7 @@ class EventInput(serializers.Serializer):
     max_speed_kmh = serializers.DecimalField(max_digits=6, decimal_places=2, min_value=0, max_value=500)
     fines = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0)
     fine_count = serializers.IntegerField(min_value=0, max_value=1000)
+    cargo_damage_percent = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100, default=0)
 
 
 @endpoint(["POST"])
@@ -189,6 +194,8 @@ def events(request):
         if bool(data["fines"]) != bool(data["fine_count"]):
             raise serializers.ValidationError("Quantidade e valor das multas inconsistentes.")
         if data["kind"] == "start":
+            if contract.license_points <= 0:
+                raise serializers.ValidationError("Habilitação suspensa. Regularize a carteira antes de iniciar novos fretes.")
             if OnlineFreight.objects.filter(contract=contract, status="active").exists() or OnlineFreight.objects.filter(pk=data["trip_id"]).exists():
                 raise serializers.ValidationError("Frete já iniciado.")
             trip = OnlineFreight.objects.create(id=data["trip_id"], contract=contract, started_at=data["occurred_at"])
@@ -200,12 +207,14 @@ def events(request):
             speeding = data["max_speed_kmh"] > rules["speed_limit"]
             commission = (data["gross"] * Decimal(contract.terms["commission_percent"]) / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if data["kind"] == "completed" else Decimal(0)
             discount = (commission * Decimal("0.10")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if speeding else Decimal(0)
-            net = commission - discount - data["fines"]
+            damage_discount = (commission * Decimal(rules.get("damage_discount_percent", 10)) / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if data["cargo_damage_percent"] > rules.get("damage_limit", 100) else Decimal(0)
+            damage_discount = min(damage_discount, commission - discount)
+            net = commission - discount - damage_discount - data["fines"]
             contract.reputation = max(0, contract.reputation - (rules["speed_reputation_loss"] if speeding else 0) - rules["fine_reputation_loss"] * data["fine_count"])
             contract.license_points = max(0, contract.license_points - rules["fine_license_points"] * data["fine_count"])
             contract.save(update_fields=["reputation", "license_points"])
             trip.status, trip.ended_at = data["kind"], data["occurred_at"]
-            trip.result = {"commission": str(commission), "speed_discount": str(discount), "fines": str(data["fines"]), "net": str(net), "company_share": str(data["gross"] - commission + discount) if data["kind"] == "completed" else "0", "max_speed_kmh": str(data["max_speed_kmh"]), "cargo": data["cargo"], "distance_km": str(data["distance_km"]), "weight_tons": str(data["weight_tons"])}
+            trip.result = {"commission": str(commission), "speed_discount": str(discount), "damage_discount": str(damage_discount), "cargo_damage_percent": str(data["cargo_damage_percent"]), "fines": str(data["fines"]), "net": str(net), "company_share": str(data["gross"] - commission + discount + damage_discount) if data["kind"] == "completed" else "0", "max_speed_kmh": str(data["max_speed_kmh"]), "cargo": data["cargo"], "distance_km": str(data["distance_km"]), "weight_tons": str(data["weight_tons"])}
             trip.save()
         FreightEvent.objects.create(id=data["id"], player=request.user, contract=contract, trip_id=trip.id, payload=payload, digest=digest)
         audit(contract.candidacy.vacancy.company, request.user, "freight_" + data["kind"], trip.id)

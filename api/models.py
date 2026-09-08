@@ -66,3 +66,31 @@ class CompanyAction(models.Model):
     action = models.CharField(max_length=50)
     reference = models.UUIDField()
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class PlayerRecruitmentProfile(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    open_to_offers = models.BooleanField(default=False)
+
+
+class DirectJobOffer(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    contract = models.OneToOneField(EmployeeContract, on_delete=models.PROTECT)
+    status = models.CharField(max_length=20, default="pending")
+    created_at = models.DateTimeField(auto_now_add=True)
+    responded_at = models.DateTimeField(null=True)
+
+
+class AutonomousDelivery(models.Model):
+    player = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    event_id = models.CharField(max_length=200)
+    game = models.CharField(max_length=4)
+    cargo = models.CharField(max_length=150)
+    distance_km = models.DecimalField(max_digits=12, decimal_places=3)
+    gross = models.DecimalField(max_digits=14, decimal_places=2)
+    commission = models.DecimalField(max_digits=14, decimal_places=2)
+    completed_at = models.DateTimeField()
+    digest = models.CharField(max_length=64)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["player", "event_id"], name="unique_autonomous_delivery")]
