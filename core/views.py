@@ -1,3 +1,4 @@
+from api.ranking import company_ranking
 from django.conf import settings
 from django.contrib import messages
 from django.core.mail import send_mail
@@ -13,6 +14,7 @@ def home(request):
         request,
         "core/home.html",
         {
+            "company_ranking": company_ranking(),
             "features": Feature.objects.filter(active=True)[:6],
             "plans": Plan.objects.filter(active=True),
             "updates": UpdatePost.objects.filter(active=True)[:3],

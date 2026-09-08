@@ -11,6 +11,28 @@
   <div class="section-heading"><div><span class="eyebrow">Recursos</span><h2>Mais profundidade, sem complicar sua viagem.</h2></div><img src="{% static 'img/feature-command-center.png' %}" alt="Central financeira e logística RoadLedger"></div>
   <div class="grid three">{% for item in features %}<article class="card"><h3>{{ item.title }}</h3><p>{{ item.description }}</p></article>{% empty %}<p>Execute o comando de dados iniciais para publicar os recursos.</p>{% endfor %}</div>
 </section>
+<section class="section" aria-labelledby="company-ranking-title">
+  <article class="card company-ranking">
+    <span class="eyebrow">Na estrada</span>
+    <h2 id="company-ranking-title">Ranking das empresas</h2>
+    <p>As 10 empresas com mais entregas concluídas. A quilometragem acumulada desempata as posições.</p>
+    {% if company_ranking %}
+    <div style="overflow-x:auto" tabindex="0" role="region" aria-label="Tabela do ranking de empresas">
+      <table style="width:100%;border-collapse:collapse;text-align:left">
+        <thead><tr><th scope="col" style="padding:12px">Posição</th><th scope="col">Empresa</th><th scope="col">Jogo</th><th scope="col">Entregas</th><th scope="col">Quilômetros</th></tr></thead>
+        <tbody>{% for company in company_ranking %}<tr>
+          <td style="padding:12px">{{ forloop.counter }}º</td>
+          <th scope="row">{{ company.contract__candidacy__vacancy__company__name }}</th>
+          <td>{{ company.contract__candidacy__vacancy__company__game }}</td>
+          <td>{{ company.deliveries }}</td>
+          <td>{{ company.kilometers|floatformat:"1g" }} km</td>
+        </tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% else %}<p>As empresas aparecerão aqui quando suas primeiras entregas forem registradas pela integração.</p>{% endif %}
+    <small>Acumulado geral. Viagens em andamento e canceladas não entram no ranking.</small>
+  </article>
+</section>
 <section class="section muted plans-brand">
   <div class="plans-heading"><div><span class="eyebrow">Planos</span><h2>Escolha seu ritmo.</h2><p>Conta protegida, licença segura e atualizações para continuar evoluindo.</p></div><img src="{% static 'img/secure-membership.png' %}" alt="Assinatura segura do RoadLedger"></div>
   <div class="grid three">{% for plan in plans %}<article class="price-card {% if plan.featured %}featured{% endif %}">{% if plan.founder %}<span class="badge">100 vagas</span>{% endif %}<h3>{{ plan.name }}</h3><p>{{ plan.description }}</p><strong>R$ {{ plan.price }}<small>/{{ plan.get_interval_display|lower }}</small></strong><a class="button" href="{% url 'subscriptions:checkout' plan.code %}">Assinar</a></article>{% endfor %}</div>

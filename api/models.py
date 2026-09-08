@@ -1,1 +1,68 @@
-# Create your models here.
+import uuid
+from django.conf import settings
+from django.db import models
+
+
+class VirtualCompany(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    name = models.CharField(max_length=150)
+    game = models.CharField(max_length=4)
+    capacity = models.PositiveIntegerField(default=0)
+    rules = models.JSONField(default=dict)
+
+
+class Vacancy(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(VirtualCompany, on_delete=models.PROTECT)
+    title = models.CharField(max_length=150)
+    description = models.TextField()
+    quantity = models.PositiveIntegerField(default=1)
+    open = models.BooleanField(default=True)
+
+
+class Candidacy(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    vacancy = models.ForeignKey(Vacancy, on_delete=models.PROTECT)
+    player = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    own_truck = models.BooleanField(default=False)
+    status = models.CharField(max_length=30, default="pending")
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["vacancy", "player"], name="unique_player_application")]
+
+
+class EmployeeContract(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    candidacy = models.OneToOneField(Candidacy, on_delete=models.PROTECT)
+    terms = models.JSONField()
+    signed_at = models.DateTimeField(null=True)
+    ended_at = models.DateTimeField(null=True)
+    reputation = models.PositiveIntegerField(default=100)
+    license_points = models.PositiveIntegerField(default=40)
+
+
+class FreightEvent(models.Model):
+    id = models.UUIDField(primary_key=True)
+    player = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    contract = models.ForeignKey(EmployeeContract, on_delete=models.PROTECT)
+    trip_id = models.UUIDField()
+    payload = models.JSONField()
+    digest = models.CharField(max_length=64)
+    received_at = models.DateTimeField(auto_now_add=True)
+
+
+class OnlineFreight(models.Model):
+    id = models.UUIDField(primary_key=True)
+    contract = models.ForeignKey(EmployeeContract, on_delete=models.PROTECT)
+    started_at = models.DateTimeField()
+    ended_at = models.DateTimeField(null=True)
+    status = models.CharField(max_length=25, default="active")
+    result = models.JSONField(default=dict)
+
+
+class CompanyAction(models.Model):
+    company = models.ForeignKey(VirtualCompany, on_delete=models.PROTECT)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    action = models.CharField(max_length=50)
+    reference = models.UUIDField()
+    created_at = models.DateTimeField(auto_now_add=True)
