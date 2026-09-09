@@ -94,3 +94,18 @@ class AutonomousDelivery(models.Model):
     digest = models.CharField(max_length=64)
     class Meta:
         constraints = [models.UniqueConstraint(fields=["player", "event_id"], name="unique_autonomous_delivery")]
+
+
+class CompanyDesktopLink(models.Model):
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    local_id = models.CharField(max_length=64)
+    company = models.OneToOneField(VirtualCompany, on_delete=models.PROTECT)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["owner", "local_id"], name="unique_desktop_company")]
+
+class VacancyDesktopLink(models.Model):
+    company = models.ForeignKey(VirtualCompany, on_delete=models.PROTECT)
+    local_id = models.CharField(max_length=64)
+    vacancy = models.OneToOneField(Vacancy, on_delete=models.PROTECT)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["company", "local_id"], name="unique_desktop_vacancy")]

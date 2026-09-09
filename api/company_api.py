@@ -223,10 +223,12 @@ def events(request):
 
 @endpoint(["GET"])
 def settlements(request):
-    return Response(list(OnlineFreight.objects.filter(contract__candidacy__player=request.user).exclude(status="active").values("id", "status", "result", "ended_at")[:200]))
+    offset = serializers.IntegerField(min_value=0, max_value=1000000).run_validation(request.query_params.get("offset", "0"))
+    return Response(list(OnlineFreight.objects.filter(contract__candidacy__player=request.user).exclude(status="active").order_by("ended_at", "id").values("id", "status", "result", "ended_at")[offset:offset + 200]))
 
 
 @endpoint(["GET"])
 def company_freights(request, company_id):
     company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
-    return Response(list(OnlineFreight.objects.filter(contract__candidacy__vacancy__company=company).values("id", "contract__candidacy__player__full_name", "status", "result", "started_at", "ended_at")[:200]))
+    offset = serializers.IntegerField(min_value=0, max_value=1000000).run_validation(request.query_params.get("offset", "0"))
+    return Response(list(OnlineFreight.objects.filter(contract__candidacy__vacancy__company=company).order_by("started_at", "id").values("id", "contract_id", "contract__candidacy__player__full_name", "status", "result", "started_at", "ended_at")[offset:offset + 200]))
