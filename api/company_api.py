@@ -225,6 +225,8 @@ def events(request):
             contract.save(update_fields=["reputation", "license_points"])
             trip.status, trip.ended_at = data["kind"], data["occurred_at"]
             trip.result = {"commission": str(commission), "speed_discount": str(discount), "damage_discount": str(damage_discount), "cargo_damage_percent": str(data["cargo_damage_percent"]), "fines": str(data["fines"]), "net": str(net), "company_share": str(data["gross"] - commission + discount + damage_discount) if data["kind"] == "completed" else "0", "max_speed_kmh": str(data["max_speed_kmh"]), "cargo": data["cargo"], "distance_km": str(data["distance_km"]), "weight_tons": str(data["weight_tons"])}
+            trip.result.update(speed_limit=rules["speed_limit"], speeding=speeding, fine_count=data["fine_count"], reputation_loss=(rules["speed_reputation_loss"] if speeding else 0) + rules["fine_reputation_loss"] * data["fine_count"], license_points_loss=rules["fine_license_points"] * data["fine_count"])
+
             trip.save()
         FreightEvent.objects.create(id=data["id"], player=request.user, contract=contract, trip_id=trip.id, payload=payload, digest=digest)
         audit(contract.candidacy.vacancy.company, request.user, "freight_" + data["kind"], trip.id)
