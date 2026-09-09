@@ -54,7 +54,7 @@ def send(request, company_id):
         candidate, created = Candidacy.objects.get_or_create(vacancy=vacancy, player=player.user, defaults={"own_truck": data.validated_data["own_truck"], "status": "awaiting_signature"})
         if not created:
             raise serializers.ValidationError("Já existe candidatura ou proposta para este player nesta vaga.")
-        contract = EmployeeContract.objects.create(candidacy=candidate, terms={"company": company.name, "game": company.game, "role": vacancy.title, "rules": company.rules, "commission_percent": 70 if candidate.own_truck else 30})
+        contract = EmployeeContract.objects.create(candidacy=candidate, terms={"company": company.name, "game": company.game, "games": ["ETS2", "ATS"], "role": vacancy.title, "rules": company.rules, "commission_percent": 70 if candidate.own_truck else 30})
         offer = DirectJobOffer.objects.create(contract=contract)
         audit(company, request.user, "direct_offer", offer.id)
     return Response({"id": offer.id, "status": offer.status}, status=201)

@@ -39,6 +39,7 @@ class EmployeeContract(models.Model):
     ended_at = models.DateTimeField(null=True)
     reputation = models.PositiveIntegerField(default=100)
     license_points = models.PositiveIntegerField(default=40)
+    game_profiles = models.JSONField(default=dict)
 
 
 class FreightEvent(models.Model):
@@ -52,6 +53,7 @@ class FreightEvent(models.Model):
 
 
 class OnlineFreight(models.Model):
+    game = models.CharField(max_length=4, default="")
     id = models.UUIDField(primary_key=True)
     contract = models.ForeignKey(EmployeeContract, on_delete=models.PROTECT)
     started_at = models.DateTimeField()

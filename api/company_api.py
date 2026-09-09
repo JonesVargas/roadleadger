@@ -77,8 +77,6 @@ def vacancies(request, company_id=None):
     if query:
         available = available.filter(company__name__icontains=query)
     game = request.query_params.get("game", "")
-    if game in ("ETS2", "ATS"):
-        available = available.filter(company__game=game)
     offset = serializers.IntegerField(min_value=0).run_validation(request.query_params.get("offset", 0))
     return Response(list(available.order_by("company__name", "id").values("id", "company_id", "company__name", "company__game", "title", "description", "quantity", "available")[offset:offset + 200]))
 
@@ -111,7 +109,7 @@ def offer(request, candidate_id):
         if candidate.status != "pending" or not candidate.vacancy.open:
             raise serializers.ValidationError("Candidatura indisponível.")
         company = candidate.vacancy.company
-        contract = EmployeeContract.objects.create(candidacy=candidate, terms={"company": company.name, "game": company.game, "rules": company.rules, "commission_percent": 70 if candidate.own_truck else 30})
+        contract = EmployeeContract.objects.create(candidacy=candidate, terms={"company": company.name, "game": company.game, "games": ["ETS2", "ATS"], "rules": company.rules, "commission_percent": 70 if candidate.own_truck else 30})
         from .models import DirectJobOffer
         DirectJobOffer.objects.create(contract=contract)
         candidate.status = "awaiting_signature"
@@ -122,7 +120,12 @@ def offer(request, candidate_id):
 
 @endpoint(["GET"])
 def contracts(request):
-    return Response(list(EmployeeContract.objects.filter(candidacy__player=request.user).values("id", "terms", "signed_at", "ended_at", "reputation", "license_points")))
+    game = request.query_params.get("game", "")
+    rows = []
+    for contract in EmployeeContract.objects.filter(candidacy__player=request.user):
+        profile = contract_profile(contract, game or contract.terms.get("game", "ETS2"))
+        rows.append(dict(id=contract.id, terms={**contract.terms, "games": ["ETS2", "ATS"]}, signed_at=contract.signed_at, ended_at=contract.ended_at, **profile))
+    return Response(rows)
 
 
 @endpoint(["POST"])
@@ -183,6 +186,16 @@ class EventInput(serializers.Serializer):
     cargo_damage_percent = serializers.DecimalField(max_digits=5, decimal_places=2, min_value=0, max_value=100, default=0)
 
 
+def contract_profile(contract, game):
+    if game not in ("ETS2", "ATS"):
+        raise serializers.ValidationError("Jogo inválido.")
+    if game in contract.game_profiles:
+        return dict(contract.game_profiles[game])
+    if game == contract.terms.get("game"):
+        return dict(reputation=contract.reputation, license_points=contract.license_points)
+    return dict(reputation=100, license_points=40)
+
+
 @endpoint(["POST"])
 def events(request):
     serializer = EventInput(data=request.data)
@@ -197,20 +210,23 @@ def events(request):
             if previous.player_id != request.user.id or previous.digest != digest:
                 raise serializers.ValidationError("Identificador repetido com conteúdo diferente.")
             return Response({"id": previous.id, "status": "received"})
-        if not contract.signed_at or contract.ended_at or contract.terms["game"] != data["game"]:
+        if not contract.signed_at or contract.ended_at:
             raise serializers.ValidationError("Vínculo não permite esse frete.")
         if data["occurred_at"] < contract.signed_at or data["occurred_at"] > timezone.now():
             raise serializers.ValidationError("Horário do evento inválido.")
         if bool(data["fines"]) != bool(data["fine_count"]):
             raise serializers.ValidationError("Quantidade e valor das multas inconsistentes.")
+        profile = contract_profile(contract, data["game"])
         if data["kind"] == "start":
-            if contract.license_points <= 0:
+            if profile["license_points"] <= 0:
                 raise serializers.ValidationError("Habilitação suspensa. Regularize a carteira antes de iniciar novos fretes.")
             if OnlineFreight.objects.filter(contract=contract, status="active").exists() or OnlineFreight.objects.filter(pk=data["trip_id"]).exists():
                 raise serializers.ValidationError("Frete já iniciado.")
-            trip = OnlineFreight.objects.create(id=data["trip_id"], contract=contract, started_at=data["occurred_at"])
+            trip = OnlineFreight.objects.create(id=data["trip_id"], contract=contract, game=data["game"], started_at=data["occurred_at"])
         else:
             trip = get_object_or_404(OnlineFreight.objects.select_for_update(), pk=data["trip_id"], contract=contract, status="active")
+            if (trip.game or contract.terms["game"]) != data["game"]:
+                raise serializers.ValidationError("O jogo da conclusão difere do início do frete.")
             if data["occurred_at"] < trip.started_at:
                 raise serializers.ValidationError("Conclusão anterior ao início.")
             rules = contract.terms["rules"]
@@ -220,12 +236,15 @@ def events(request):
             damage_discount = (commission * Decimal(rules.get("damage_discount_percent", 10)) / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if data["cargo_damage_percent"] > rules.get("damage_limit", 100) else Decimal(0)
             damage_discount = min(damage_discount, commission - discount)
             net = commission - discount - damage_discount - data["fines"]
-            contract.reputation = max(0, contract.reputation - (rules["speed_reputation_loss"] if speeding else 0) - rules["fine_reputation_loss"] * data["fine_count"])
-            contract.license_points = max(0, contract.license_points - rules["fine_license_points"] * data["fine_count"])
-            contract.save(update_fields=["reputation", "license_points"])
+            profile["reputation"] = max(0, profile["reputation"] - (rules["speed_reputation_loss"] if speeding else 0) - rules["fine_reputation_loss"] * data["fine_count"])
+            profile["license_points"] = max(0, profile["license_points"] - rules["fine_license_points"] * data["fine_count"])
+            contract.game_profiles[data["game"]] = profile
+            if data["game"] == contract.terms.get("game"):
+                contract.reputation, contract.license_points = profile["reputation"], profile["license_points"]
+            contract.save(update_fields=["reputation", "license_points", "game_profiles"])
             trip.status, trip.ended_at = data["kind"], data["occurred_at"]
             trip.result = {"commission": str(commission), "speed_discount": str(discount), "damage_discount": str(damage_discount), "cargo_damage_percent": str(data["cargo_damage_percent"]), "fines": str(data["fines"]), "net": str(net), "company_share": str(data["gross"] - commission + discount + damage_discount) if data["kind"] == "completed" else "0", "max_speed_kmh": str(data["max_speed_kmh"]), "cargo": data["cargo"], "distance_km": str(data["distance_km"]), "weight_tons": str(data["weight_tons"])}
-            trip.result.update(speed_limit=rules["speed_limit"], speeding=speeding, fine_count=data["fine_count"], reputation_loss=(rules["speed_reputation_loss"] if speeding else 0) + rules["fine_reputation_loss"] * data["fine_count"], license_points_loss=rules["fine_license_points"] * data["fine_count"])
+            trip.result.update(game=data["game"], speed_limit=rules["speed_limit"], speeding=speeding, fine_count=data["fine_count"], reputation_loss=(rules["speed_reputation_loss"] if speeding else 0) + rules["fine_reputation_loss"] * data["fine_count"], license_points_loss=rules["fine_license_points"] * data["fine_count"])
 
             trip.save()
         FreightEvent.objects.create(id=data["id"], player=request.user, contract=contract, trip_id=trip.id, payload=payload, digest=digest)
@@ -236,14 +255,14 @@ def events(request):
 @endpoint(["GET"])
 def settlements(request):
     offset = serializers.IntegerField(min_value=0, max_value=1000000).run_validation(request.query_params.get("offset", "0"))
-    return Response(list(OnlineFreight.objects.filter(contract__candidacy__player=request.user).exclude(status="active").order_by("ended_at", "id").values("id", "status", "result", "ended_at")[offset:offset + 200]))
+    return Response(list(OnlineFreight.objects.filter(contract__candidacy__player=request.user).exclude(status="active").order_by("ended_at", "id").values("id", "game", "status", "result", "ended_at")[offset:offset + 200]))
 
 
 @endpoint(["GET"])
 def company_freights(request, company_id):
     company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
     offset = serializers.IntegerField(min_value=0, max_value=1000000).run_validation(request.query_params.get("offset", "0"))
-    return Response(list(OnlineFreight.objects.filter(contract__candidacy__vacancy__company=company).order_by("started_at", "id").values("id", "contract_id", "contract__candidacy__player__full_name", "status", "result", "started_at", "ended_at")[offset:offset + 200]))
+    return Response(list(OnlineFreight.objects.filter(contract__candidacy__vacancy__company=company).order_by("started_at", "id").values("id", "game", "contract_id", "contract__candidacy__player__full_name", "status", "result", "started_at", "ended_at")[offset:offset + 200]))
 
 
 @endpoint(["POST"])

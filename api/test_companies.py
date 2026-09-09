@@ -66,3 +66,19 @@ class CompanyIntegrationTests(TestCase):
         response = self.client.get("/")
         self.assertContains(response, "Ranking das empresas")
         self.assertContains(response, "Empresa A")
+
+    def test_same_contract_both_games_separate_points(self):
+        contract = self.hired()
+        def event(game, kind, trip):
+            return dict(id=str(uuid.uuid4()), trip_id=trip, contract_id=str(contract.id), kind=kind, occurred_at=timezone.now().isoformat(), game=game, cargo="Arroz", distance_km="100", weight_tons="20", gross="1000", max_speed_kmh="50", fines="50" if kind == "completed" else "0", fine_count=1 if kind == "completed" else 0)
+        for game in ("ETS2", "ATS"):
+            trip = str(uuid.uuid4())
+            self.assertEqual(self.call(self.player, "my/freight-events/", event(game, "start", trip)).status_code, 201)
+            wrong = "ATS" if game == "ETS2" else "ETS2"
+            self.assertEqual(self.call(self.player, "my/freight-events/", event(wrong, "completed", trip)).status_code, 400)
+            self.assertEqual(self.call(self.player, "my/freight-events/", event(game, "completed", trip)).status_code, 201)
+            profile = self.call(self.player, "my/contracts/?game=" + game).json()[0]
+            self.assertEqual(profile["license_points"], 33)
+            self.assertEqual(profile["reputation"], 95)
+        self.assertEqual(company_ranking()[0]["deliveries"], 2)
+        self.assertEqual(company_ranking()[0]["kilometers"], 200)

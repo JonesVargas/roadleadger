@@ -48,7 +48,7 @@ class JobBoardTests(TestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(str(response.data[0]["id"]), str(vacancy.id))
         self.assertEqual(response.data[0]["available"], 2)
-        self.assertEqual(client.get("/api/v1/vacancies/", {"q": "Aurora", "game": "ATS"}).data, [])
+        self.assertEqual(len(client.get("/api/v1/vacancies/", {"q": "Aurora", "game": "ATS"}).data), 1)
         self.assertEqual(client.get("/api/v1/vacancies/", {"offset": 2}).data, [])
         self.assertEqual(client.get("/api/v1/vacancies/", {"offset": -1}).status_code, 400)
         company.capacity = 0
