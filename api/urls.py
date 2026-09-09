@@ -19,6 +19,7 @@ urlpatterns = [
     path("v1/companies/<uuid:company_id>/vacancies/", company_api.vacancies),
     path("v1/vacancies/<uuid:vacancy_id>/applications/", company_api.apply),
     path("v1/companies/<uuid:company_id>/applications/", company_api.applications),
+    path("v1/applications/<uuid:candidate_id>/reject/", company_api.reject_application),
     path("v1/applications/<uuid:candidate_id>/offer/", company_api.offer),
     path("v1/my/contracts/", company_api.contracts),
     path("v1/contracts/<uuid:contract_id>/accept/", company_api.accept),

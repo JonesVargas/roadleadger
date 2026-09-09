@@ -30,3 +30,56 @@ class JobBoardTests(TestCase):
 
     def test_empty_state(self):
         self.assertContains(self.client.get("/"), "Nenhuma empresa com vagas disponíveis")
+
+    def test_player_search_by_company_and_game(self):
+        from rest_framework.test import APIClient
+        owner = User.objects.create_user("search-owner@board.test", "test")
+        player = User.objects.create_user("search-player@board.test", "test")
+        company = VirtualCompany.objects.create(owner=owner, name="Transportes Aurora", game="ETS2", capacity=2)
+        vacancy = Vacancy.objects.create(company=company, title="Motorista", quantity=5)
+        Vacancy.objects.create(company=company, title="Fechada", open=False)
+        other = VirtualCompany.objects.create(owner=owner, name="Outra", game="ATS", capacity=2)
+        Vacancy.objects.create(company=other, title="Motorista")
+        client = APIClient()
+        self.assertEqual(client.get("/api/v1/vacancies/").status_code, 403)
+        client.force_authenticate(player)
+        response = client.get("/api/v1/vacancies/", {"q": "aurora", "game": "ETS2"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(str(response.data[0]["id"]), str(vacancy.id))
+        self.assertEqual(response.data[0]["available"], 2)
+        self.assertEqual(client.get("/api/v1/vacancies/", {"q": "Aurora", "game": "ATS"}).data, [])
+        self.assertEqual(client.get("/api/v1/vacancies/", {"offset": 2}).data, [])
+        self.assertEqual(client.get("/api/v1/vacancies/", {"offset": -1}).status_code, 400)
+        company.capacity = 0
+        company.save()
+        self.assertEqual(client.get("/api/v1/vacancies/", {"q": "Aurora"}).data, [])
+
+    def test_candidate_contract_appears_in_player_inbox(self):
+        from rest_framework.test import APIClient
+        owner = User.objects.create_user("offer-owner@board.test", "test")
+        player = User.objects.create_user("offer-player@board.test", "test")
+        company = VirtualCompany.objects.create(owner=owner, name="Aurora", game="ETS2", capacity=2)
+        vacancy = Vacancy.objects.create(company=company, title="Motorista")
+        client = APIClient()
+        client.force_authenticate(player)
+        response = client.post(f"/api/v1/vacancies/{vacancy.id}/applications/", {"own_truck": False}, format="json")
+        self.assertEqual(response.status_code, 201)
+        ident = response.data["id"]
+        self.assertEqual(client.get(f"/api/v1/companies/{company.id}/applications/").status_code, 404)
+        self.assertEqual(client.post(f"/api/v1/applications/{ident}/reject/").status_code, 404)
+        client.force_authenticate(owner)
+        rows = client.get(f"/api/v1/companies/{company.id}/applications/").data
+        self.assertEqual(rows[0]["vacancy__title"], "Motorista")
+        self.assertEqual(client.post(f"/api/v1/applications/{ident}/offer/").status_code, 201)
+        self.assertEqual(client.post(f"/api/v1/applications/{ident}/offer/").status_code, 400)
+        client.force_authenticate(player)
+        inbox = client.get("/api/v1/my/job-offers/")
+        self.assertEqual(inbox.status_code, 200)
+        self.assertEqual(len(inbox.data), 1)
+        second = Vacancy.objects.create(company=company, title="Outra vaga")
+        candidate = Candidacy.objects.create(vacancy=second, player=player)
+        client.force_authenticate(owner)
+        self.assertEqual(client.post(f"/api/v1/applications/{candidate.id}/reject/").status_code, 200)
+        candidate.refresh_from_db()
+        self.assertEqual(candidate.status, "declined")

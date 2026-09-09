@@ -26,3 +26,12 @@ def hiring_companies(limit=12):
         row["openings"] = min(capacity, row["openings"] + free)
         row["vacancies"].append(dict(title=vacancy.title, description=vacancy.description, available=min(free, capacity)))
     return list(companies.values())
+
+
+def available_vacancies():
+    from django.db.models import F
+    from django.db.models.functions import Least
+    active = EmployeeContract.objects.filter(signed_at__isnull=False, ended_at__isnull=True)
+    filled = active.filter(candidacy__vacancy_id=OuterRef("pk")).values("candidacy__vacancy_id").annotate(total=Count("pk")).values("total")
+    employed = active.filter(candidacy__vacancy__company_id=OuterRef("company_id")).values("candidacy__vacancy__company_id").annotate(total=Count("pk")).values("total")
+    return Vacancy.objects.filter(open=True).annotate(available=Least(F("quantity") - Coalesce(Subquery(filled, output_field=IntegerField()), Value(0)), F("company__capacity") - Coalesce(Subquery(employed, output_field=IntegerField()), Value(0)))).filter(available__gt=0)

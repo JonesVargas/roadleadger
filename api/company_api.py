@@ -69,10 +69,18 @@ def vacancies(request, company_id=None):
             vacancy = Vacancy.objects.create(company=company, title=text(request.data, "title"), description=text(request.data, "description", 4000), quantity=integer(request.data, "quantity", 1, 1, 1000))
             audit(company, request.user, "vacancy_created", vacancy.id)
         return Response({"id": vacancy.id}, status=201)
-    available = Vacancy.objects.filter(open=True)
+    from .job_board import available_vacancies
+    available = available_vacancies()
     if company_id is not None:
         available = available.filter(company_id=company_id)
-    return Response(list(available.values("id", "company_id", "company__name", "title", "description", "quantity")[:200]))
+    query = request.query_params.get("q", "").strip()[:150]
+    if query:
+        available = available.filter(company__name__icontains=query)
+    game = request.query_params.get("game", "")
+    if game in ("ETS2", "ATS"):
+        available = available.filter(company__game=game)
+    offset = serializers.IntegerField(min_value=0).run_validation(request.query_params.get("offset", 0))
+    return Response(list(available.order_by("company__name", "id").values("id", "company_id", "company__name", "company__game", "title", "description", "quantity", "available")[offset:offset + 200]))
 
 
 @endpoint(["POST"])
@@ -93,7 +101,7 @@ def apply(request, vacancy_id):
 @endpoint(["GET"])
 def applications(request, company_id):
     company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
-    return Response(list(Candidacy.objects.filter(vacancy__company=company).values("id", "player__full_name", "vacancy_id", "own_truck", "status")[:200]))
+    return Response(list(Candidacy.objects.filter(vacancy__company=company).values("id", "player__full_name", "vacancy_id", "vacancy__title", "own_truck", "status")[:200]))
 
 
 @endpoint(["POST"])
@@ -104,6 +112,8 @@ def offer(request, candidate_id):
             raise serializers.ValidationError("Candidatura indisponível.")
         company = candidate.vacancy.company
         contract = EmployeeContract.objects.create(candidacy=candidate, terms={"company": company.name, "game": company.game, "rules": company.rules, "commission_percent": 70 if candidate.own_truck else 30})
+        from .models import DirectJobOffer
+        DirectJobOffer.objects.create(contract=contract)
         candidate.status = "awaiting_signature"
         candidate.save(update_fields=["status"])
         audit(company, request.user, "contract_offered", contract.id)
@@ -232,3 +242,15 @@ def company_freights(request, company_id):
     company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
     offset = serializers.IntegerField(min_value=0, max_value=1000000).run_validation(request.query_params.get("offset", "0"))
     return Response(list(OnlineFreight.objects.filter(contract__candidacy__vacancy__company=company).order_by("started_at", "id").values("id", "contract_id", "contract__candidacy__player__full_name", "status", "result", "started_at", "ended_at")[offset:offset + 200]))
+
+
+@endpoint(["POST"])
+def reject_application(request, candidate_id):
+    with transaction.atomic():
+        candidate = get_object_or_404(Candidacy.objects.select_for_update(), pk=candidate_id, vacancy__company__owner=request.user)
+        if candidate.status != "pending":
+            raise serializers.ValidationError("Esta candidatura já foi avaliada.")
+        candidate.status = "declined"
+        candidate.save(update_fields=["status"])
+        audit(candidate.vacancy.company, request.user, "application_declined", candidate.id)
+    return Response({"status": candidate.status})
