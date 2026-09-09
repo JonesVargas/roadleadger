@@ -1,3 +1,4 @@
+from api.job_board import hiring_companies
 from api.ranking import company_ranking, driver_ranking
 from django.conf import settings
 from django.contrib import messages
@@ -16,6 +17,7 @@ def home(request):
         {
             "company_ranking": company_ranking(),
             "driver_ranking": driver_ranking(),
+            "hiring_companies": hiring_companies(),
             "features": Feature.objects.filter(active=True)[:6],
             "plans": Plan.objects.filter(active=True),
             "updates": UpdatePost.objects.filter(active=True)[:3],

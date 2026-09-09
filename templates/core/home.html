@@ -42,6 +42,32 @@
 {% else %}<p>Os motoristas aparecerão após sincronizar suas primeiras entregas.</p>{% endif %}
 <small>Localize os jogadores disponíveis pelo nome ou ID. A contratação depende do aceite do jogador.</small>
 </article></section>
+<section class="section" aria-labelledby="hiring-title">
+  <article class="card">
+    <span class="eyebrow">Oportunidades na estrada</span>
+    <h2 id="hiring-title">Empresas com vagas abertas</h2>
+    <p>Conheça as empresas que estão recebendo candidaturas de players.</p>
+    {% if hiring_companies %}
+    <div class="grid three">
+      {% for company in hiring_companies %}
+      <article class="panel">
+        <span class="badge">{{ company.game }}</span>
+        <h3>{{ company.name }}</h3>
+        <p><strong>{{ company.openings }} vaga{{ company.openings|pluralize }}</strong> {% if company.openings == 1 %}disponível{% else %}disponíveis{% endif %}</p>
+        <details><summary>Ver cargos e detalhes</summary>
+          {% for vacancy in company.vacancies %}
+          <h4>{{ vacancy.title }}</h4>
+          <p>{{ vacancy.description|linebreaksbr }}</p>
+          <small>Até {{ vacancy.available }} vaga{{ vacancy.available|pluralize }} neste cargo.</small>
+          {% endfor %}
+        </details>
+      </article>
+      {% endfor %}
+    </div>
+    <p class="fineprint">As vagas dependem da capacidade da empresa e podem compartilhar as mesmas posições disponíveis. A contratação exige aprovação da empresa e aceite do player.</p>
+    {% else %}<p>Nenhuma empresa com vagas disponíveis no momento. Volte em breve para conferir novas oportunidades.</p>{% endif %}
+  </article>
+</section>
 <section class="section muted plans-brand">
   <div class="plans-heading"><div><span class="eyebrow">Planos</span><h2>Escolha seu ritmo.</h2><p>Conta protegida, licença segura e atualizações para continuar evoluindo.</p></div><img src="{% static 'img/secure-membership.png' %}" alt="Assinatura segura do RoadLedger"></div>
   <div class="grid three">{% for plan in plans %}<article class="price-card {% if plan.featured %}featured{% endif %}">{% if plan.founder %}<span class="badge">100 vagas</span>{% endif %}<h3>{{ plan.name }}</h3><p>{{ plan.description }}</p><strong>R$ {{ plan.price }}<small>/{{ plan.get_interval_display|lower }}</small></strong><a class="button" href="{% url 'subscriptions:checkout' plan.code %}">Assinar</a></article>{% endfor %}</div>
