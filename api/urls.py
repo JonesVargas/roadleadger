@@ -14,6 +14,7 @@ urlpatterns = [
     path("v1/companies/<uuid:company_id>/job-offers/", recruitment.send),
     path("v1/companies/", company_api.companies),
     path("v1/companies/<uuid:company_id>/rules/", company_api.rules),
+    path("v1/companies/<uuid:company_id>/employees/", company_api.employees),
     path("v1/companies/<uuid:company_id>/freights/", company_api.company_freights),
     path("v1/vacancies/", company_api.vacancies),
     path("v1/companies/<uuid:company_id>/vacancies/", company_api.vacancies),

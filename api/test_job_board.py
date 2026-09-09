@@ -83,3 +83,21 @@ class JobBoardTests(TestCase):
         self.assertEqual(client.post(f"/api/v1/applications/{candidate.id}/reject/").status_code, 200)
         candidate.refresh_from_db()
         self.assertEqual(candidate.status, "declined")
+
+    def test_company_employees_are_private_and_signed_only(self):
+        from rest_framework.test import APIClient
+        owner = User.objects.create_user("staff-owner@board.test", "test")
+        player = User.objects.create_user("staff-player@board.test", "test")
+        company = VirtualCompany.objects.create(owner=owner, name="Aurora", game="ETS2", capacity=2)
+        vacancy = Vacancy.objects.create(company=company, title="Motorista")
+        candidate = Candidacy.objects.create(vacancy=vacancy, player=player)
+        contract = EmployeeContract.objects.create(candidacy=candidate, terms={})
+        client = APIClient()
+        client.force_authenticate(player)
+        path = f"/api/v1/companies/{company.id}/employees/"
+        self.assertEqual(client.get(path).status_code, 404)
+        client.force_authenticate(owner)
+        self.assertEqual(client.get(path).data, [])
+        contract.signed_at = timezone.now()
+        contract.save()
+        self.assertEqual(len(client.get(path).data), 1)

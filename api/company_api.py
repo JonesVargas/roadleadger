@@ -254,3 +254,9 @@ def reject_application(request, candidate_id):
         candidate.save(update_fields=["status"])
         audit(candidate.vacancy.company, request.user, "application_declined", candidate.id)
     return Response({"status": candidate.status})
+
+
+@endpoint(["GET"])
+def employees(request, company_id):
+    company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
+    return Response(list(EmployeeContract.objects.filter(candidacy__vacancy__company=company, signed_at__isnull=False).values("id", "candidacy__player_id", "candidacy__player__full_name", "candidacy__own_truck", "candidacy__vacancy__title", "terms", "signed_at", "ended_at", "reputation", "license_points")))
