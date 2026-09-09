@@ -1,1 +1,13 @@
-{% extends 'base.html' %}{% block content %}<section class="auth"><div class="panel"><h1>Token criado</h1><p>Copie agora. Por segurança, ele não será mostrado novamente.</p><code class="token">{{ token }}</code><a class="button" href="{% url 'dashboard:home' %}">Voltar ao painel</a></div></section>{% endblock %}
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<section class="auth"><div class="panel">
+  <h1>Token criado</h1>
+  <p>Copie agora. Por segurança, ele não será mostrado novamente.</p>
+  <code class="token" id="created-token">{{ token }}</code>
+  <button class="button" type="button" id="copy-token">Copiar token</button>
+  <p id="copy-token-status" role="status" aria-live="polite"></p>
+  <a class="button ghost" href="{% url 'dashboard:home' %}">Voltar ao painel</a>
+</div></section>
+<script src="{% static 'js/copy-token.js' %}" defer></script>
+{% endblock %}
