@@ -49,9 +49,9 @@ class CompanyIntegrationTests(TestCase):
         self.assertEqual(contract.reputation, 90)
         self.assertEqual(contract.license_points, 33)
         result = OnlineFreight.objects.get(pk=trip).result
-        self.assertEqual(result["commission"], "700.00")
-        self.assertEqual(result["speed_discount"], "70.00")
-        self.assertEqual(result["net"], "580.00")
+        self.assertEqual(result["commission"], "1767.50")
+        self.assertEqual(result["speed_discount"], "176.75")
+        self.assertEqual(result["net"], "1540.75")
         payload["gross"] = "2000.00"
         self.assertEqual(self.call(self.player, "my/freight-events/", payload).status_code, 400)
         self.assertEqual(FreightEvent.objects.count(), 2)
@@ -82,3 +82,21 @@ class CompanyIntegrationTests(TestCase):
             self.assertEqual(profile["reputation"], 95)
         self.assertEqual(company_ranking()[0]["deliveries"], 2)
         self.assertEqual(company_ranking()[0]["kilometers"], 200)
+
+    def test_archive_preserves_results_events_and_active_trips(self):
+        self.test_telemetry_penalties_and_retry()
+        trip = OnlineFreight.objects.get()
+        result = trip.result.copy()
+        active = OnlineFreight.objects.create(id=uuid.uuid4(), contract=trip.contract, started_at=timezone.now(), status="active")
+        endpoint = "my/archive-freight-history/"
+        payload = {"confirm": "archive_keep_balances"}
+        self.assertEqual(self.call(self.other, endpoint, payload).json()["company_freights"], 0)
+        self.assertEqual(self.call(self.owner, endpoint, payload).json()["company_freights"], 1)
+        self.assertEqual(self.call(self.owner, endpoint, payload).json()["company_freights"], 0)
+        trip.refresh_from_db()
+        active.refresh_from_db()
+        self.assertEqual(trip.status, "archived")
+        self.assertEqual(trip.result, result)
+        self.assertEqual(active.status, "active")
+        self.assertEqual(FreightEvent.objects.count(), 2)
+        self.assertEqual(company_ranking(), [])

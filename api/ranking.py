@@ -15,7 +15,7 @@ def driver_ranking(limit=10):
     from decimal import Decimal
     from .models import AutonomousDelivery, PlayerRecruitmentProfile
     totals = {}
-    for row in AutonomousDelivery.objects.values("player_id").annotate(deliveries=Count("id"), kilometers=Sum("distance_km")):
+    for row in AutonomousDelivery.objects.filter(archived=False).values("player_id").annotate(deliveries=Count("id"), kilometers=Sum("distance_km")):
         totals[row["player_id"]] = [row["deliveries"], row["kilometers"] or Decimal(0)]
     for row in OnlineFreight.objects.filter(status="completed").values("contract__candidacy__player_id").annotate(deliveries=Count("id"), kilometers=Sum(Cast(KeyTextTransform("distance_km", "result"), DecimalField(max_digits=20, decimal_places=3)))):
         values = totals.setdefault(row["contract__candidacy__player_id"], [0, Decimal(0)])

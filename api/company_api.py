@@ -229,6 +229,9 @@ def events(request):
                 raise serializers.ValidationError("O jogo da conclusão difere do início do frete.")
             if data["occurred_at"] < trip.started_at:
                 raise serializers.ValidationError("Conclusão anterior ao início.")
+            from .freight_pricing import freight_price, VERSION
+            game_gross = data["gross"]
+            data["gross"] = freight_price(data["distance_km"], data["weight_tons"]) if data["kind"] == "completed" else Decimal(0)
             rules = contract.terms["rules"]
             speeding = data["max_speed_kmh"] > rules["speed_limit"]
             commission = (data["gross"] * Decimal(contract.terms["commission_percent"]) / 100).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP) if data["kind"] == "completed" else Decimal(0)
@@ -244,7 +247,7 @@ def events(request):
             contract.save(update_fields=["reputation", "license_points", "game_profiles"])
             trip.status, trip.ended_at = data["kind"], data["occurred_at"]
             trip.result = {"commission": str(commission), "speed_discount": str(discount), "damage_discount": str(damage_discount), "cargo_damage_percent": str(data["cargo_damage_percent"]), "fines": str(data["fines"]), "net": str(net), "company_share": str(data["gross"] - commission + discount + damage_discount) if data["kind"] == "completed" else "0", "max_speed_kmh": str(data["max_speed_kmh"]), "cargo": data["cargo"], "distance_km": str(data["distance_km"]), "weight_tons": str(data["weight_tons"])}
-            trip.result.update(game=data["game"], speed_limit=rules["speed_limit"], speeding=speeding, fine_count=data["fine_count"], reputation_loss=(rules["speed_reputation_loss"] if speeding else 0) + rules["fine_reputation_loss"] * data["fine_count"], license_points_loss=rules["fine_license_points"] * data["fine_count"])
+            trip.result.update(gross=str(data["gross"]), game_gross=str(game_gross), pricing_version=VERSION, game=data["game"], speed_limit=rules["speed_limit"], speeding=speeding, fine_count=data["fine_count"], reputation_loss=(rules["speed_reputation_loss"] if speeding else 0) + rules["fine_reputation_loss"] * data["fine_count"], license_points_loss=rules["fine_license_points"] * data["fine_count"])
 
             trip.save()
         FreightEvent.objects.create(id=data["id"], player=request.user, contract=contract, trip_id=trip.id, payload=payload, digest=digest)
@@ -255,14 +258,14 @@ def events(request):
 @endpoint(["GET"])
 def settlements(request):
     offset = serializers.IntegerField(min_value=0, max_value=1000000).run_validation(request.query_params.get("offset", "0"))
-    return Response(list(OnlineFreight.objects.filter(contract__candidacy__player=request.user).exclude(status="active").order_by("ended_at", "id").values("id", "game", "status", "result", "ended_at")[offset:offset + 200]))
+    return Response(list(OnlineFreight.objects.filter(contract__candidacy__player=request.user).filter(status__in=["completed", "cancelled"]).order_by("ended_at", "id").values("id", "game", "status", "result", "ended_at")[offset:offset + 200]))
 
 
 @endpoint(["GET"])
 def company_freights(request, company_id):
     company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
     offset = serializers.IntegerField(min_value=0, max_value=1000000).run_validation(request.query_params.get("offset", "0"))
-    return Response(list(OnlineFreight.objects.filter(contract__candidacy__vacancy__company=company).order_by("started_at", "id").values("id", "game", "contract_id", "contract__candidacy__player__full_name", "status", "result", "started_at", "ended_at")[offset:offset + 200]))
+    return Response(list(OnlineFreight.objects.filter(contract__candidacy__vacancy__company=company).exclude(status="archived").order_by("started_at", "id").values("id", "game", "contract_id", "contract__candidacy__player__full_name", "status", "result", "started_at", "ended_at")[offset:offset + 200]))
 
 
 @endpoint(["POST"])
@@ -281,3 +284,15 @@ def reject_application(request, candidate_id):
 def employees(request, company_id):
     company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
     return Response(list(EmployeeContract.objects.filter(candidacy__vacancy__company=company, signed_at__isnull=False).values("id", "candidacy__player_id", "candidacy__player__full_name", "candidacy__own_truck", "candidacy__vacancy__title", "terms", "signed_at", "ended_at", "reputation", "license_points")))
+
+
+@endpoint(["POST"])
+def archive_history(request):
+    from .models import AutonomousDelivery
+    if request.data.get("confirm") != "archive_keep_balances":
+        raise serializers.ValidationError("Confirme a limpeza do histórico preservando pagamentos.")
+    with transaction.atomic():
+        company_count = OnlineFreight.objects.filter(contract__candidacy__vacancy__company__owner=request.user, status__in=["completed", "cancelled"]).update(status="archived")
+        player_count = OnlineFreight.objects.filter(contract__candidacy__player=request.user, status__in=["completed", "cancelled"]).update(status="archived")
+        autonomous = AutonomousDelivery.objects.filter(player=request.user, archived=False).update(archived=True)
+    return Response(dict(company_freights=company_count, player_freights=player_count, autonomous=autonomous))

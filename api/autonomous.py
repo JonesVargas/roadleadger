@@ -16,6 +16,8 @@ class DeliveryInput(serializers.Serializer):
     distance_km = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=0, max_value=100000)
     gross = serializers.DecimalField(max_digits=14, decimal_places=2, min_value=0)
     completed_at = serializers.DateTimeField()
+    pricing_version = serializers.ChoiceField(choices=["distance_weight_v1"], required=False)
+    weight_tons = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=0, required=False)
 
 @endpoint(["POST"])
 def upload(request):
@@ -34,6 +36,13 @@ def upload(request):
             raise serializers.ValidationError("Data futura.")
         if EmployeeContract.objects.filter(candidacy__player=request.user, signed_at__lte=data["completed_at"]).filter(Q(ended_at__isnull=True) | Q(ended_at__gte=data["completed_at"])).exists():
             raise serializers.ValidationError("Frete dentro do período de contrato de empresa.")
+        version = data.pop("pricing_version", None)
+        weight = data.pop("weight_tons", None)
+        if version:
+            if weight is None:
+                raise serializers.ValidationError("Informe o peso para a nova tarifa.")
+            from .freight_pricing import freight_price
+            data["gross"] = freight_price(data["distance_km"], weight)
         value = (data["gross"] * Decimal("0.70")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         item = AutonomousDelivery.objects.create(player=request.user, digest=digest, commission=value, **data)
         PlayerRecruitmentProfile.objects.get_or_create(user=request.user)

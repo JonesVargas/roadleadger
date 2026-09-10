@@ -85,6 +85,7 @@ class DirectJobOffer(models.Model):
 
 
 class AutonomousDelivery(models.Model):
+    archived = models.BooleanField(default=False)
     player = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     event_id = models.CharField(max_length=200)
     game = models.CharField(max_length=4)
