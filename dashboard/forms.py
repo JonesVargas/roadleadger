@@ -183,3 +183,21 @@ class LegalPageForm(AdminModelForm):
         fields = ("kind", "version", "body")
         labels = {"kind": "Documento", "version": "Versão", "body": "Conteúdo"}
         widgets = {"body": forms.Textarea(attrs={"rows": 10})}
+
+
+from api.models import OfficialMission, MissionMap
+
+class MissionMapForm(AdminModelForm):
+    class Meta:
+        model = MissionMap
+        fields = ["name", "game"]
+
+class OfficialMissionForm(AdminModelForm):
+    class Meta:
+        model = OfficialMission
+        fields = ["title", "description", "game", "map", "starts_at", "ends_at", "deliveries", "distance_km", "weight_tons", "max_damage_percent", "reward_money", "reward_reputation", "published"]
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 4}),
+            "starts_at": forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={"type": "datetime-local"}),
+            "ends_at": forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={"type": "datetime-local"}),
+        }

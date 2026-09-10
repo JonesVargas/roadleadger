@@ -1,0 +1,14 @@
+{% load static %}
+<div class="admin-title"><div><span class="eyebrow">Desafios oficiais RoadLedger</span><h2>Missões para empresas</h2><p>Crie desafios com jogo, mapa, metas e recompensas para as empresas. As missões criadas pelos proprietários continuam independentes.</p></div></div>
+<div class="admin-grid form-first">
+<form class="panel admin-form" method="post" action="{% url 'dashboard:manager_save' 'mission' %}">{% csrf_token %}
+<h3>{% if editing == 'mission' %}Editar missão{% else %}Criar missão{% endif %}</h3>
+{% if editing == 'mission' and edit_id %}<input type="hidden" name="object_id" value="{{ edit_id }}">{% endif %}
+{{ forms.mission.as_p }}<button class="button" type="submit">Salvar missão</button> <a href="?section=missoes">Nova missão</a>
+</form>
+<div class="panel"><h3>Missões cadastradas</h3>
+{% for mission in official_missions %}<article class="admin-list"><div><strong>{{ mission.title }}</strong><small>{{ mission.get_game_display }} · {{ mission.map.name }}</small><p>{{ mission.deliveries }} entrega(s) · {{ mission.distance_km }} km · {{ mission.weight_tons }} t<br>Dano máximo: {{ mission.max_damage_percent }}%<br>Recompensa: {{ mission.reward_money }} em dinheiro virtual + {{ mission.reward_reputation }} pontos de reputação<br>{{ mission.starts_at|date:'d/m/Y H:i' }} até {{ mission.ends_at|date:'d/m/Y H:i' }}</p><span>{% if mission.published %}Publicada{% else %}Rascunho{% endif %}</span></div><a href="?section=missoes&edit=mission&id={{ mission.pk }}">Editar</a></article>{% empty %}<p>Nenhuma missão criada. Preencha o formulário para começar.</p>{% endfor %}
+</div></div>
+<details class="panel admin-editor" {% if editing == 'mission-map' %}open{% endif %}><summary>Cadastrar mapas adicionais</summary><p>Cadastre o nome do mapa e o jogo correspondente. Depois selecione-o na missão.</p><form method="post" action="{% url 'dashboard:manager_save' 'mission-map' %}">{% csrf_token %}{{ map_form.as_p }}<button class="button" type="submit">Adicionar mapa</button></form></details>
+{{ mission_maps|json_script:'mission-map-options' }}
+<script src="{% static 'js/missions.js' %}" defer></script>

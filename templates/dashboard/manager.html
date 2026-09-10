@@ -12,6 +12,7 @@
     <a class="{% if section == 'clientes' %}active{% endif %}" href="?section=clientes">Clientes e acessos</a>
     <a class="{% if section == 'suporte' %}active{% endif %}" href="?section=suporte">Suporte{% if open_support_tickets %} ({{ open_support_tickets }}){% endif %}</a>
     <a class="{% if section == 'conteudo' %}active{% endif %}" href="?section=conteudo">Conteúdo do site</a>
+    <a class="{% if section == 'missoes' %}active{% endif %}" href="?section=missoes">Missões para empresas</a>
   </nav>
   <div class="admin-workspace">
   {% if section == 'visao-geral' %}
@@ -42,6 +43,8 @@
       <div class="panel table-panel"><h3>Todos os chamados</h3>{% for ticket in support_tickets %}<a class="admin-list" href="?section=suporte&ticket={{ ticket.pk }}"><div><strong>#{{ ticket.pk }} · {{ ticket.subject }}</strong><small>{{ ticket.user.full_name|default:'Sem nome' }} · {{ ticket.user.email }} · {{ ticket.updated_at|date:'d/m/Y H:i' }}</small></div><span class="status {{ ticket.status }}">{{ ticket.get_status_display }}</span></a>{% empty %}<p>Nenhum chamado recebido.</p>{% endfor %}</div>
       <div class="panel">{% if selected_ticket %}<span class="eyebrow">Chamado #{{ selected_ticket.pk }}</span><h3>{{ selected_ticket.subject }}</h3><p>{{ selected_ticket.user.full_name }} · {{ selected_ticket.user.email }}</p><form class="status-form" method="post" action="{% url 'dashboard:manager_support_status' selected_ticket.pk %}">{% csrf_token %}<select name="status">{% for value,label in selected_ticket.STATUS %}<option value="{{ value }}" {% if selected_ticket.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="mini-button" type="submit">Atualizar situação</button></form>{% for message in selected_ticket.messages.all %}<article class="message"><strong>{{ message.author.full_name|default:'Equipe RoadLedger' }}</strong><small>{{ message.created_at|date:'d/m/Y H:i' }}</small><p>{{ message.body|linebreaksbr }}</p></article>{% endfor %}<form class="admin-form" method="post" action="{% url 'dashboard:manager_support_reply' selected_ticket.pk %}">{% csrf_token %}{{ support_reply_form.as_p }}<button class="button" type="submit">Enviar resposta</button></form>{% else %}<h3>Selecione um chamado</h3><p>Escolha um item da lista para visualizar a conversa.</p>{% endif %}</div>
     </div>
+  {% elif section == 'missoes' %}
+    {% include 'dashboard/missions.html' %}
   {% elif section == 'conteudo' %}
     <div class="admin-title"><div><span class="eyebrow">Editor do site</span><h2>Conteúdo público</h2><p>Atualize recursos, perguntas, notícias, status, links e documentos legais.</p></div></div>
     <div class="content-admin-grid">

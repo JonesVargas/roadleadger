@@ -47,6 +47,8 @@ def home(request):
             or sub.plan.code in version.min_plan_codes
         ][:10]
     return render(request, "dashboard/home.html", {
+        "company_backup": CompanyCloudBackup.objects.filter(owner=request.user).select_related("company").defer("content").first(),
+        "owned_companies": VirtualCompany.objects.filter(owner=request.user),
         "subscription": sub,
         "devices": request.user.devices.filter(revoked_at__isnull=True),
         "versions": versions,
@@ -61,7 +63,12 @@ def superuser_required(view):
     return user_passes_test(lambda user: user.is_authenticated and user.is_superuser)(view)
 
 
+from api.models import OfficialMission, MissionMap, CompanyCloudBackup, VirtualCompany
+from .forms import OfficialMissionForm, MissionMapForm
+
 MANAGED = {
+    "mission": (OfficialMission, OfficialMissionForm, "missoes"),
+    "mission-map": (MissionMap, MissionMapForm, "missoes"),
     "version": (AppVersion, AppVersionForm, "versoes"),
     "plan": (Plan, PlanForm, "planos"),
     "feature": (Feature, FeatureForm, "conteudo"),
@@ -78,10 +85,14 @@ def _manager_url(section="visao-geral"):
 
 
 @superuser_required
-def manager(request):
+def manager(request, bound_form=None, bound_entity=None):
     entity, edit_id = request.GET.get("edit"), request.GET.get("id")
     edit_object = get_object_or_404(MANAGED[entity][0], pk=edit_id) if entity in MANAGED and edit_id else None
     forms = {key: form_class(instance=edit_object if entity == key else None, prefix=key) for key, (_model, form_class, _section) in MANAGED.items()}
+    if bound_form is not None:
+        forms[bound_entity] = bound_form
+        entity = bound_entity
+        edit_id = request.POST.get("object_id")
     payment_configs = {
         item.environment: item for item in PaymentProviderConfig.objects.all()
     }
@@ -100,6 +111,9 @@ def manager(request):
             pk=selected_ticket_id,
         )
     context = {
+        "official_missions": OfficialMission.objects.select_related("map").all(),
+        "mission_maps": list(MissionMap.objects.values("id", "name", "game")),
+        "map_form": forms["mission-map"],
         "users": User.objects.count(),
         "active_subscriptions": Subscription.objects.filter(status__in=["active", "authorized"]).count(),
         "lifetime_users": User.objects.filter(lifetime_access=True).count(),
@@ -119,7 +133,7 @@ def manager(request):
         "open_support_tickets": SupportTicket.objects.filter(status="open").count(),
         "selected_ticket": selected_ticket,
         "support_reply_form": MessageForm(prefix="support"),
-        "section": request.GET.get("section", "visao-geral"),
+        "section": MANAGED[bound_entity][2] if bound_entity else request.GET.get("section", "visao-geral"),
     }
     return render(request, "dashboard/manager.html", context)
 
@@ -204,6 +218,8 @@ def manager_save(request, entity):
         AuditEvent.objects.create(actor=request.user, action=f"manager.{entity}.save", target=f"{model.__name__}#{item.pk}")
         messages.success(request, "Alterações salvas com sucesso.")
         return redirect(_manager_url(section))
+    if entity in {"mission", "mission-map"}:
+        return manager(request, bound_form=form, bound_entity=entity)
     messages.error(request, "Não foi possível salvar. Revise os dados informados.")
     return redirect(f'{_manager_url(section)}&edit={entity}' + (f"&id={object_id}" if object_id else ""))
 
