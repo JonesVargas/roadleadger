@@ -100,3 +100,21 @@ class CompanyIntegrationTests(TestCase):
         self.assertEqual(active.status, "active")
         self.assertEqual(FreightEvent.objects.count(), 2)
         self.assertEqual(company_ranking(), [])
+
+    def test_player_resignation_ownership_active_trip_and_retry(self):
+        contract = self.hired()
+        endpoint = f"contracts/{contract.id}/resign/"
+        self.assertEqual(self.call(self.other, endpoint, {"confirmed": True}).status_code, 404)
+        self.assertEqual(self.call(self.player, endpoint, {"confirmed": False}).status_code, 400)
+        trip = OnlineFreight.objects.create(id=uuid.uuid4(), contract=contract, started_at=timezone.now(), status="active")
+        self.assertEqual(self.call(self.player, endpoint, {"confirmed": True}).status_code, 400)
+        trip.status = "completed"
+        trip.result = {"company_share": "156.00", "net": "364.00"}
+        trip.save()
+        self.assertEqual(self.call(self.player, endpoint, {"confirmed": True}).status_code, 200)
+        self.assertEqual(self.call(self.player, endpoint, {"confirmed": True}).status_code, 200)
+        contract.refresh_from_db()
+        self.assertIsNotNone(contract.ended_at)
+        trip.refresh_from_db()
+        self.assertEqual(trip.result["company_share"], "156.00")
+        self.assertEqual(contract.candidacy.status, "resigned")

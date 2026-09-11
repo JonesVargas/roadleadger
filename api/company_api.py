@@ -296,3 +296,22 @@ def archive_history(request):
         player_count = OnlineFreight.objects.filter(contract__candidacy__player=request.user, status__in=["completed", "cancelled"]).update(status="archived")
         autonomous = AutonomousDelivery.objects.filter(player=request.user, archived=False).update(archived=True)
     return Response(dict(company_freights=company_count, player_freights=player_count, autonomous=autonomous))
+
+
+@endpoint(["POST"])
+def resign(request, contract_id):
+    if request.data.get("confirmed") is not True:
+        raise serializers.ValidationError("Confirme o pedido de demissão.")
+    with transaction.atomic():
+        contract = get_object_or_404(EmployeeContract.objects.select_for_update(), pk=contract_id, candidacy__player=request.user, signed_at__isnull=False)
+        if contract.ended_at:
+            return Response({"status": "resigned", "ended_at": contract.ended_at})
+        if OnlineFreight.objects.filter(contract=contract, status="active").exists():
+            raise serializers.ValidationError("Conclua ou cancele o frete em andamento antes de pedir demissão.")
+        contract.ended_at = timezone.now()
+        contract.terms = {**contract.terms, "termination_type": "player_resignation", "dismissal_reason": "Pedido de demissão do player"}
+        contract.save(update_fields=["ended_at", "terms"])
+        contract.candidacy.status = "resigned"
+        contract.candidacy.save(update_fields=["status"])
+        audit(contract.candidacy.vacancy.company, request.user, "player_resigned", contract.id)
+    return Response({"status": "resigned", "ended_at": contract.ended_at})

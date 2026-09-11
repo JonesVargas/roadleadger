@@ -5,6 +5,7 @@ from . import views
 
 app_name = "api"
 urlpatterns = [
+    path("v1/contracts/<uuid:contract_id>/resign/", company_api.resign),
     path("v1/my/company-backup/", company_backup.backup),
     path("v1/companies/<uuid:company_id>/official-missions/", missions.catalog),
     path("v1/my/archive-freight-history/", company_api.archive_history),
