@@ -1,3 +1,5 @@
+from functools import wraps
+from subscriptions.access import allowed_apps
 import hashlib
 import json
 from decimal import Decimal, ROUND_HALF_UP
@@ -14,9 +16,14 @@ from .models import VirtualCompany, Vacancy, Candidacy, EmployeeContract, Freigh
 DEFAULT_RULES = {"damage_limit": 5, "damage_discount_percent": 10, "speed_limit": 90, "speed_reputation_loss": 5, "fine_reputation_loss": 5, "fine_license_points": 7}
 
 
-def endpoint(methods):
+def endpoint(methods, app=None):
     def wrap(func):
-        return api_view(methods)(authentication_classes([HashedTokenAuthentication])(permission_classes([IsAuthenticated])(func)))
+        @wraps(func)
+        def authorized(request, *args, **kwargs):
+            if app and app not in allowed_apps(request.user):
+                return Response({"detail": "O plano Empresa Virtual é necessário para gerenciar empresas."}, status=403)
+            return func(request, *args, **kwargs)
+        return api_view(methods)(authentication_classes([HashedTokenAuthentication])(permission_classes([IsAuthenticated])(authorized)))
     return wrap
 
 
@@ -38,7 +45,7 @@ def integer(data, key, default, minimum, maximum):
     return value
 
 
-@endpoint(["GET", "POST"])
+@endpoint(["GET", "POST"], app="company")
 def companies(request):
     if request.method == "POST":
         name, game = text(request.data, "name"), text(request.data, "game")
@@ -51,7 +58,7 @@ def companies(request):
     return Response(list(VirtualCompany.objects.filter(owner=request.user).values("id", "name", "game", "capacity", "rules")))
 
 
-@endpoint(["PUT"])
+@endpoint(["PUT"], app="company")
 def rules(request, company_id):
     with transaction.atomic():
         company = get_object_or_404(VirtualCompany.objects.select_for_update(), pk=company_id, owner=request.user)
@@ -63,6 +70,8 @@ def rules(request, company_id):
 
 @endpoint(["GET", "POST"])
 def vacancies(request, company_id=None):
+    if request.method == "POST" and "company" not in allowed_apps(request.user):
+        return Response({"detail": "O plano Empresa Virtual é necessário para publicar vagas."}, status=403)
     if request.method == "POST":
         company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
         with transaction.atomic():
@@ -96,13 +105,13 @@ def apply(request, vacancy_id):
     return Response({"id": candidate.id, "status": candidate.status}, status=201 if created else 200)
 
 
-@endpoint(["GET"])
+@endpoint(["GET"], app="company")
 def applications(request, company_id):
     company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
     return Response(list(Candidacy.objects.filter(vacancy__company=company).values("id", "player__full_name", "vacancy_id", "vacancy__title", "own_truck", "status")[:200]))
 
 
-@endpoint(["POST"])
+@endpoint(["POST"], app="company")
 def offer(request, candidate_id):
     with transaction.atomic():
         candidate = get_object_or_404(Candidacy.objects.select_for_update().select_related("vacancy__company"), pk=candidate_id, vacancy__company__owner=request.user)
@@ -155,7 +164,7 @@ def sign_contract(user, contract_id):
     return {"status": "signed"}
 
 
-@endpoint(["POST"])
+@endpoint(["POST"], app="company")
 def dismiss(request, contract_id):
     reason = text(request.data, "reason", 1000)
     with transaction.atomic():
@@ -261,14 +270,14 @@ def settlements(request):
     return Response(list(OnlineFreight.objects.filter(contract__candidacy__player=request.user).filter(status__in=["completed", "cancelled"]).order_by("ended_at", "id").values("id", "game", "status", "result", "ended_at")[offset:offset + 200]))
 
 
-@endpoint(["GET"])
+@endpoint(["GET"], app="company")
 def company_freights(request, company_id):
     company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
     offset = serializers.IntegerField(min_value=0, max_value=1000000).run_validation(request.query_params.get("offset", "0"))
     return Response(list(OnlineFreight.objects.filter(contract__candidacy__vacancy__company=company).exclude(status="archived").order_by("started_at", "id").values("id", "game", "contract_id", "contract__candidacy__player__full_name", "status", "result", "started_at", "ended_at")[offset:offset + 200]))
 
 
-@endpoint(["POST"])
+@endpoint(["POST"], app="company")
 def reject_application(request, candidate_id):
     with transaction.atomic():
         candidate = get_object_or_404(Candidacy.objects.select_for_update(), pk=candidate_id, vacancy__company__owner=request.user)
@@ -280,7 +289,7 @@ def reject_application(request, candidate_id):
     return Response({"status": candidate.status})
 
 
-@endpoint(["GET"])
+@endpoint(["GET"], app="company")
 def employees(request, company_id):
     company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
     return Response(list(EmployeeContract.objects.filter(candidacy__vacancy__company=company, signed_at__isnull=False).values("id", "candidacy__player_id", "candidacy__player__full_name", "candidacy__own_truck", "candidacy__vacancy__title", "terms", "signed_at", "ended_at", "reputation", "license_points")))

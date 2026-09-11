@@ -166,7 +166,7 @@ class CustomerAreaTests(TestCase):
             file=SimpleUploadedFile("RoadLedger-Setup.exe", b"installer"),
         )
         response = self.client.get(reverse("dashboard:home") + "?section=downloads")
-        self.assertContains(response, "RoadLedger 2.0")
+        self.assertContains(response, "RoadLedger original (offline) · 2.0")
         self.assertContains(response, ">Baixar</a>", html=False)
 
     def test_account_uses_payment_and_download_cards_instead_of_loose_navigation(self):

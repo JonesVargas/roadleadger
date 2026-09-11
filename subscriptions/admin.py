@@ -5,7 +5,8 @@ from .models import Plan, Subscription, SubscriptionHistory
 
 @admin.register(Plan)
 class PlanAdmin(admin.ModelAdmin):
-    list_display = ("name", "price", "interval", "founder", "subscriber_limit", "active")
+    list_display = ("name", "product", "price", "interval", "founder", "subscriber_limit", "active")
+    list_filter = ("product", "active", "interval")
 
 
 @admin.register(Subscription)

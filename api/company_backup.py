@@ -11,7 +11,7 @@ from .views import active_sub
 
 MAX_BACKUP_BYTES = 1_500_000
 
-@endpoint(["GET", "POST"])
+@endpoint(["GET", "POST"], app="company")
 def backup(request):
     sub = active_sub(request.user)
     if not (request.user.lifetime_access or (sub and sub.grants_access)):

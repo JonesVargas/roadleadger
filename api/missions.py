@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from .company_api import endpoint
 from .models import VirtualCompany, OfficialMission
 
-@endpoint(["GET"])
+@endpoint(["GET"], app="company")
 def catalog(request, company_id):
     get_object_or_404(VirtualCompany, id=company_id, owner=request.user)
     now = timezone.now()

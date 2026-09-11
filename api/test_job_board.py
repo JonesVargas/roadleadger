@@ -6,7 +6,7 @@ from .job_board import hiring_companies
 
 class JobBoardTests(TestCase):
     def test_public_card_excludes_closed_full_and_zero_capacity(self):
-        owner = User.objects.create_user("owner@board.test", "test")
+        owner = User.objects.create_user("owner@board.test", "test", lifetime_access=True)
         player = User.objects.create_user("player@board.test", "test")
         company = VirtualCompany.objects.create(owner=owner, name="Transportes Teste", game="ETS2", capacity=2)
         Vacancy.objects.create(company=company, title="Motorista", description="Viagens", quantity=5)
@@ -33,7 +33,7 @@ class JobBoardTests(TestCase):
 
     def test_player_search_by_company_and_game(self):
         from rest_framework.test import APIClient
-        owner = User.objects.create_user("search-owner@board.test", "test")
+        owner = User.objects.create_user("search-owner@board.test", "test", lifetime_access=True)
         player = User.objects.create_user("search-player@board.test", "test")
         company = VirtualCompany.objects.create(owner=owner, name="Transportes Aurora", game="ETS2", capacity=2)
         vacancy = Vacancy.objects.create(company=company, title="Motorista", quantity=5)
@@ -57,7 +57,7 @@ class JobBoardTests(TestCase):
 
     def test_candidate_contract_appears_in_player_inbox(self):
         from rest_framework.test import APIClient
-        owner = User.objects.create_user("offer-owner@board.test", "test")
+        owner = User.objects.create_user("offer-owner@board.test", "test", lifetime_access=True)
         player = User.objects.create_user("offer-player@board.test", "test")
         company = VirtualCompany.objects.create(owner=owner, name="Aurora", game="ETS2", capacity=2)
         vacancy = Vacancy.objects.create(company=company, title="Motorista")
@@ -66,8 +66,8 @@ class JobBoardTests(TestCase):
         response = client.post(f"/api/v1/vacancies/{vacancy.id}/applications/", {"own_truck": False}, format="json")
         self.assertEqual(response.status_code, 201)
         ident = response.data["id"]
-        self.assertEqual(client.get(f"/api/v1/companies/{company.id}/applications/").status_code, 404)
-        self.assertEqual(client.post(f"/api/v1/applications/{ident}/reject/").status_code, 404)
+        self.assertEqual(client.get(f"/api/v1/companies/{company.id}/applications/").status_code, 403)
+        self.assertEqual(client.post(f"/api/v1/applications/{ident}/reject/").status_code, 403)
         client.force_authenticate(owner)
         rows = client.get(f"/api/v1/companies/{company.id}/applications/").data
         self.assertEqual(rows[0]["vacancy__title"], "Motorista")
@@ -86,7 +86,7 @@ class JobBoardTests(TestCase):
 
     def test_company_employees_are_private_and_signed_only(self):
         from rest_framework.test import APIClient
-        owner = User.objects.create_user("staff-owner@board.test", "test")
+        owner = User.objects.create_user("staff-owner@board.test", "test", lifetime_access=True)
         player = User.objects.create_user("staff-player@board.test", "test")
         company = VirtualCompany.objects.create(owner=owner, name="Aurora", game="ETS2", capacity=2)
         vacancy = Vacancy.objects.create(company=company, title="Motorista")
@@ -95,7 +95,7 @@ class JobBoardTests(TestCase):
         client = APIClient()
         client.force_authenticate(player)
         path = f"/api/v1/companies/{company.id}/employees/"
-        self.assertEqual(client.get(path).status_code, 404)
+        self.assertEqual(client.get(path).status_code, 403)
         client.force_authenticate(owner)
         self.assertEqual(client.get(path).data, [])
         contract.signed_at = timezone.now()

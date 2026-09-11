@@ -90,12 +90,12 @@ class AppVersionForm(AdminModelForm):
     plan_codes = forms.CharField(
         label="Planos com acesso",
         required=False,
-        help_text="Separe os códigos por vírgula. Deixe vazio para liberar a todos.",
+        help_text="Restrição adicional opcional: códigos separados por vírgula. Vazio libera aos planos que incluem o aplicativo selecionado.",
     )
 
     class Meta:
         model = AppVersion
-        fields = ("version", "channel", "file", "release_notes", "published")
+        fields = ("application", "version", "channel", "file", "release_notes", "published")
         labels = {"version": "Versão", "channel": "Canal", "file": "Instalador", "release_notes": "Notas da versão", "published": "Disponível para download"}
         widgets = {"release_notes": forms.Textarea(attrs={"rows": 4})}
 
@@ -122,7 +122,7 @@ class PlanForm(AdminModelForm):
 
     class Meta:
         model = Plan
-        fields = ("code", "name", "description", "price", "interval", "interval_count", "founder", "subscriber_limit", "active", "featured")
+        fields = ("code", "name", "product", "description", "price", "interval", "interval_count", "founder", "subscriber_limit", "active", "featured")
         labels = {"code": "Código", "name": "Nome", "description": "Descrição", "price": "Preço", "interval": "Cobrança", "interval_count": "Quantidade de períodos", "founder": "Plano fundador", "subscriber_limit": "Limite de assinantes", "active": "Disponível para venda", "featured": "Destacar no site"}
         widgets = {"description": forms.Textarea(attrs={"rows": 3})}
 

@@ -19,7 +19,7 @@ class CompanyInput(serializers.Serializer):
     rules = serializers.DictField()
     vacancies = VacancyInput(many=True, max_length=1000)
 
-@endpoint(["POST"])
+@endpoint(["POST"], app="company")
 def synchronize(request):
     serializer = CompanyInput(data=request.data)
     serializer.is_valid(raise_exception=True)

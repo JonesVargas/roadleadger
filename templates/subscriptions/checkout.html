@@ -4,7 +4,7 @@
   <form method="post" class="panel">
     <span class="eyebrow">Checkout seguro</span>
     <h1>{{ plan.name }}</h1>
-    <p>{{ plan.description }}</p>
+    <p>{{ plan.description }}</p><ul>{% for app in plan.included_app_names %}<li>{{ app }}</li>{% endfor %}</ul>
     <div class="checkout-price">R$ {{ plan.price }} / {{ plan.get_interval_display|lower }}</div>
     <p class="fineprint">Escolha como deseja pagar. O acesso será liberado somente após a confirmação oficial do Mercado Pago.</p>
     {% csrf_token %}

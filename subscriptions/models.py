@@ -3,6 +3,8 @@ from django.db import models
 
 
 class Plan(models.Model):
+    PRODUCT_CHOICES = [("player", "Player — offline e online"), ("company", "Empresa Virtual — os três aplicativos")]
+    product = models.CharField("Aplicativos incluídos", max_length=12, choices=PRODUCT_CHOICES, default="player")
     code = models.SlugField(unique=True)
     name = models.CharField(max_length=80)
     description = models.TextField(blank=True)
@@ -19,6 +21,16 @@ class Plan(models.Model):
 
     class Meta:
         ordering = ["price"]
+
+    @property
+    def included_apps(self):
+        from .access import PRODUCT_APPS
+        return PRODUCT_APPS[self.product]
+
+    @property
+    def included_app_names(self):
+        from .access import APP_LABELS
+        return [APP_LABELS[app] for app in self.included_apps]
 
     def __str__(self):
         return self.name

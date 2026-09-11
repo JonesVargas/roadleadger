@@ -7,8 +7,8 @@ from licenses.models import ApiToken
 
 class MissionTests(TestCase):
     def setUp(self):
-        self.admin = User.objects.create_superuser(email="admin@mission.test", password="test-password")
-        self.owner = User.objects.create_user(email="owner@mission.test", password="test-password")
+        self.admin = User.objects.create_superuser(email="admin@mission.test", password="test-password", lifetime_access=True)
+        self.owner = User.objects.create_user(email="owner@mission.test", password="test-password", lifetime_access=True)
         self.map = MissionMap.objects.get(game="ETS2", name="Mapa original (SCS)")
         self.data = {"mission-title": "Missão oficial de teste", "mission-description": "Transporte cargas com cuidado.", "mission-game": "ETS2", "mission-map": self.map.pk, "mission-starts_at": "2026-01-01T10:00", "mission-ends_at": "2027-01-01T10:00", "mission-deliveries": 10, "mission-distance_km": 500, "mission-weight_tons": 100, "mission-max_damage_percent": 5, "mission-reward_money": 5000, "mission-reward_reputation": 10, "mission-published": "on"}
 

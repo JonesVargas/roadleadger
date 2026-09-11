@@ -5,6 +5,8 @@ from django.db import models
 
 
 class AppVersion(models.Model):
+    APPLICATIONS = [("offline", "RoadLedger original (offline)"), ("player", "RoadLedger Player (online)"), ("company", "RoadLedger Empresa Virtual")]
+    application = models.CharField("Aplicativo", max_length=12, choices=APPLICATIONS, default="offline")
     CHANNELS = [("stable", "Estável"), ("beta", "Beta")]
     version = models.CharField(max_length=40)
     channel = models.CharField(max_length=12, choices=CHANNELS, default="stable")
@@ -17,7 +19,7 @@ class AppVersion(models.Model):
     published_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        unique_together = [("version", "channel")]
+        unique_together = [("application", "version", "channel")]
         ordering = ["-published_at", "-id"]
 
     def calculate_hash(self):

@@ -21,7 +21,7 @@ def profile(request):
     return Response({"id": item.id, "name": request.user.full_name, "open_to_offers": item.open_to_offers})
 
 
-@endpoint(["GET"])
+@endpoint(["GET"], app="company")
 def players(request, company_id):
     get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
     query = request.query_params.get("q", "").strip()
@@ -37,7 +37,7 @@ def players(request, company_id):
     return Response([{"id": r.id, "name": r.user.full_name} for r in rows.select_related("user")])
 
 
-@endpoint(["POST"])
+@endpoint(["POST"], app="company")
 def send(request, company_id):
     class Input(serializers.Serializer):
         player_id = serializers.UUIDField()

@@ -9,6 +9,7 @@ from accounts.models import User
 from audit.models import AuditEvent
 from core.models import FAQ, Feature, LegalPage, ServiceStatus, SocialLink, UpdatePost
 from downloads.models import AppVersion, DownloadEvent
+from subscriptions.access import can_download as version_allowed
 from payments.models import Payment, PaymentProviderConfig
 from subscriptions.models import Plan, Subscription
 from support.forms import MessageForm
@@ -42,9 +43,7 @@ def home(request):
         versions = [
             version
             for version in AppVersion.objects.filter(published=True)
-            if request.user.lifetime_access
-            or not version.min_plan_codes
-            or sub.plan.code in version.min_plan_codes
+            if version_allowed(request.user, version)
         ][:10]
     return render(request, "dashboard/home.html", {
         "company_backup": CompanyCloudBackup.objects.filter(owner=request.user).select_related("company").defer("content").first(),

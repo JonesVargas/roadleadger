@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
 from downloads.models import AppVersion
+from subscriptions.access import APP_LABELS, allowed_apps, can_download
 from licenses.models import ApiToken, Device, DeviceCode
 
 from .authentication import HashedTokenAuthentication
@@ -48,9 +49,14 @@ def active_sub(user):
 @permission_classes([IsAuthenticated])
 def entitlements(request):
     sub = active_sub(request.user)
+    apps = allowed_apps(request.user)
+    application = request.GET.get("app")
+    if application is not None and application not in APP_LABELS:
+        return Response({"detail": "Aplicativo inválido."}, status=400)
     return Response(
         {
-            "active": request.user.lifetime_access or bool(sub),
+            "active": application in apps if application else bool(apps),
+            "apps": list(apps),
             "lifetime": request.user.lifetime_access,
             "plan": "lifetime" if request.user.lifetime_access else (sub.plan.code if sub else None),
             "features": ["all"] if request.user.lifetime_access else (sub.plan.entitlements if sub else []),
@@ -65,12 +71,18 @@ def latest_version(request):
     sub = active_sub(request.user)
     if not request.user.lifetime_access and not sub:
         return Response({"detail": "Assinatura ativa necessária."}, status=403)
-    version = AppVersion.objects.filter(published=True, channel=request.GET.get("channel", "stable")).first()
+    application = request.GET.get("app", "offline")
+    if application not in APP_LABELS:
+        return Response({"detail": "Aplicativo inválido."}, status=400)
+    if application not in allowed_apps(request.user):
+        return Response({"detail": "Seu plano não inclui este aplicativo."}, status=403)
+    version = next((v for v in AppVersion.objects.filter(published=True, application=application, channel=request.GET.get("channel", "stable")) if can_download(request.user, v)), None)
     if not version:
         return Response({"detail": "Nenhuma versão publicada."}, status=404)
     return Response(
         {
             "version": version.version,
+            "application": version.application,
             "channel": version.channel,
             "sha256": version.sha256,
             "size": version.file_size,

@@ -5,7 +5,8 @@ from .models import AppVersion, DownloadEvent
 
 @admin.register(AppVersion)
 class AppVersionAdmin(admin.ModelAdmin):
-    list_display = ("version", "channel", "published", "file_size", "published_at")
+    list_display = ("application", "version", "channel", "published", "file_size", "published_at")
+    list_filter = ("application", "published")
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)

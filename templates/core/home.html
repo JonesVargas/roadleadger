@@ -70,7 +70,7 @@
 </section>
 <section class="section muted plans-brand">
   <div class="plans-heading"><div><span class="eyebrow">Planos</span><h2>Escolha seu ritmo.</h2><p>Conta protegida, licença segura e atualizações para continuar evoluindo.</p></div><img src="{% static 'img/secure-membership.png' %}" alt="Assinatura segura do RoadLedger"></div>
-  <div class="grid three">{% for plan in plans %}<article class="price-card {% if plan.featured %}featured{% endif %}">{% if plan.founder %}<span class="badge">100 vagas</span>{% endif %}<h3>{{ plan.name }}</h3><p>{{ plan.description }}</p><strong>R$ {{ plan.price }}<small>/{{ plan.get_interval_display|lower }}</small></strong><a class="button" href="{% url 'subscriptions:checkout' plan.code %}">Assinar</a></article>{% endfor %}</div>
+  <div class="grid plan-options">{% for plan in plans %}<article class="price-card {% if plan.featured %}featured{% endif %}">{% if plan.founder %}<span class="badge">100 vagas</span>{% endif %}<h3>{{ plan.name }}</h3><p>{{ plan.description }}</p><ul>{% for app in plan.included_app_names %}<li>✓ {{ app }}</li>{% endfor %}</ul><strong>R$ {{ plan.price }}<small>/{{ plan.get_interval_display|lower }}</small></strong><a class="button" href="{% url 'subscriptions:checkout' plan.code %}">Assinar</a></article>{% endfor %}</div>
 </section>
 <section class="cta"><img src="{% static 'img/roadledger-logo.png' %}" alt="" aria-hidden="true"><h2>Pronto para escrever sua história na estrada?</h2><p>Crie sua conta e prepare o RoadLedger para a próxima viagem.</p><a class="button" href="{% url 'accounts:register' %}">Criar conta</a></section>
 {% endblock %}
