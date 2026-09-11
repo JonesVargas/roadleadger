@@ -47,3 +47,5 @@ body{background:radial-gradient(circle at 85% 8%,rgba(14,93,74,.22),transparent 
 .legal-document{padding-top:35px}.legal-document h2{font-size:clamp(1.7rem,3vw,2.35rem);color:var(--ivory);margin:0 0 28px}.legal-document h3{font-size:1.2rem;color:var(--green);letter-spacing:.01em;margin:42px 0 12px;padding-top:20px;border-top:1px solid #153b57}.legal-document p{color:#c1ced8;line-height:1.85;margin-bottom:20px}.legal-document p:first-of-type{padding:14px 18px;border-left:3px solid var(--amber);background:#071b2c;border-radius:0 12px 12px 0;color:var(--text)}
 
 .grid.plan-options{grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr))}
+
+.customer-search{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:20px}.customer-search input{flex:1;min-width:200px}.manual-access-editor{width:100%;min-width:220px}.manual-access-editor summary{cursor:pointer;display:inline-block}.manual-access-editor form{display:grid;gap:8px;padding-top:12px}.manual-access-editor label{font-size:.85rem}.manual-access-editor select{width:100%;min-width:0}

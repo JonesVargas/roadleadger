@@ -7,15 +7,11 @@ from rest_framework.response import Response
 from rest_framework import serializers
 from .company_api import endpoint
 from .models import CompanyCloudBackup, VirtualCompany
-from .views import active_sub
 
 MAX_BACKUP_BYTES = 1_500_000
 
 @endpoint(["GET", "POST"], app="company")
 def backup(request):
-    sub = active_sub(request.user)
-    if not (request.user.lifetime_access or (sub and sub.grants_access)):
-        return Response({"detail": "Uma assinatura ativa é necessária para sincronizar a empresa."}, status=403)
     if request.method == "GET":
         row = CompanyCloudBackup.objects.filter(owner=request.user).select_related("company").first()
         if not row:

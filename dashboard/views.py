@@ -1,6 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.db.models import Sum
+from django.db.models import Sum, Q
+from django.db import transaction
+from datetime import timedelta
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -9,7 +11,7 @@ from accounts.models import User
 from audit.models import AuditEvent
 from core.models import FAQ, Feature, LegalPage, ServiceStatus, SocialLink, UpdatePost
 from downloads.models import AppVersion, DownloadEvent
-from subscriptions.access import can_download as version_allowed
+from subscriptions.access import can_download as version_allowed, allowed_apps
 from payments.models import Payment, PaymentProviderConfig
 from subscriptions.models import Plan, Subscription
 from support.forms import MessageForm
@@ -36,8 +38,8 @@ def home(request):
     section = request.GET.get("section", "conta")
     if section not in {"conta", "pagamentos", "downloads"}:
         section = "conta"
-    has_subscription = bool(sub) or request.user.lifetime_access
-    can_download = request.user.lifetime_access or bool(sub and sub.grants_access)
+    has_subscription = bool(sub) or request.user.lifetime_access or request.user.has_manual_access
+    can_download = bool(allowed_apps(request.user))
     versions = []
     if can_download:
         versions = [
@@ -109,7 +111,12 @@ def manager(request, bound_form=None, bound_entity=None):
             SupportTicket.objects.select_related("user").prefetch_related("messages__author"),
             pk=selected_ticket_id,
         )
+    customer_query = request.GET.get("q", "").strip()[:150]
+    customers = User.objects.order_by("-date_joined")
+    if customer_query:
+        customers = customers.filter(Q(full_name__icontains=customer_query) | Q(email__icontains=customer_query))
     context = {
+        "customer_query": customer_query,
         "official_missions": OfficialMission.objects.select_related("map").all(),
         "mission_maps": list(MissionMap.objects.values("id", "name", "game")),
         "map_form": forms["mission-map"],
@@ -122,7 +129,7 @@ def manager(request, bound_form=None, bound_entity=None):
         "versions": AppVersion.objects.all(), "plans": Plan.objects.all(), "features": Feature.objects.all(),
         "faqs": FAQ.objects.all(), "updates": UpdatePost.objects.all(), "services": ServiceStatus.objects.all(),
         "social_links": SocialLink.objects.all(), "legal_pages": LegalPage.objects.all(),
-        "customers": User.objects.order_by("-date_joined")[:100],
+        "customers": customers[:100],
         "subscriptions": Subscription.objects.select_related("user", "plan").order_by("-updated_at")[:100],
         "subscription_statuses": Subscription.STATUS,
         "forms": forms, "editing": entity, "edit_id": edit_id,
@@ -217,7 +224,7 @@ def manager_save(request, entity):
         AuditEvent.objects.create(actor=request.user, action=f"manager.{entity}.save", target=f"{model.__name__}#{item.pk}")
         messages.success(request, "Alterações salvas com sucesso.")
         return redirect(_manager_url(section))
-    if entity in {"mission", "mission-map"}:
+    if entity in {"mission", "mission-map", "plan", "version"}:
         return manager(request, bound_form=form, bound_entity=entity)
     messages.error(request, "Não foi possível salvar. Revise os dados informados.")
     return redirect(f'{_manager_url(section)}&edit={entity}' + (f"&id={object_id}" if object_id else ""))
@@ -267,4 +274,28 @@ def manager_subscription_status(request, subscription_id):
             subscription.save(update_fields=["status", "updated_at"])
             AuditEvent.objects.create(actor=request.user, action="manager.subscription.status", target=f"Subscription#{subscription.pk}", metadata={"status": status})
             messages.success(request, "Situação da assinatura atualizada.")
+    return redirect(_manager_url("clientes"))
+
+
+@superuser_required
+def manager_manual_access(request, user_id):
+    if request.method != "POST":
+        return redirect(_manager_url("clientes"))
+    action = request.POST.get("action")
+    if action not in {"grant", "revoke"}:
+        messages.error(request, "Escolha liberar ou revogar o acesso.")
+        return redirect(_manager_url("clientes"))
+    product = request.POST.get("product")
+    duration = request.POST.get("duration")
+    if action == "grant" and (product not in {"player", "company"} or duration not in {"30", "90", "365", "unlimited"}):
+        messages.error(request, "Selecione um plano e um prazo válidos.")
+        return redirect(_manager_url("clientes"))
+    with transaction.atomic():
+        customer = get_object_or_404(User.objects.select_for_update(), pk=user_id)
+        previous = {"plan": customer.manual_plan, "expires_at": customer.manual_access_expires_at.isoformat() if customer.manual_access_expires_at else None}
+        customer.manual_plan = product if action == "grant" else ""
+        customer.manual_access_expires_at = timezone.now() + timedelta(days=int(duration)) if action == "grant" and duration != "unlimited" else None
+        customer.save(update_fields=["manual_plan", "manual_access_expires_at"])
+        AuditEvent.objects.create(actor=request.user, action="manager.manual_access."+action, target=f"User#{customer.pk}", metadata={"previous": previous, "plan": customer.manual_plan, "expires_at": customer.manual_access_expires_at.isoformat() if customer.manual_access_expires_at else None})
+    messages.success(request, "Acesso liberado sem cobrança." if action == "grant" else "Liberação manual revogada. Assinaturas pagas e acesso vitalício foram preservados.")
     return redirect(_manager_url("clientes"))

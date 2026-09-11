@@ -12,3 +12,9 @@ As migrações criam as duas ofertas mensais, retiram as antigas de novas vendas
 A API de permissões retorna `apps` e aceita `?app=offline`, `?app=player` ou `?app=company`. A busca de versão também usa esse parâmetro e respeita as permissões. As operações de gestão da empresa exigem acesso ao aplicativo company; os funcionários continuam consultando vagas e contratos.
 
 Validação: 78 testes do site e 17 do aplicativo Empresa. Testes usam contas temporárias e não efetuam cobranças reais.
+
+## Liberação pelo administrador
+
+Em **Clientes**, busque por nome ou e-mail e clique em **Liberar plano**. Escolha Player ou Empresa Virtual e um prazo de 30, 90 ou 365 dias, ou sem vencimento. **Salvar liberação** concede os aplicativos sem criar assinatura ou cobrança. **Revogar liberação manual** remove somente esse acesso extra; assinaturas pagas e o acesso vitalício continuam valendo. O histórico administrativo registra quem liberou ou revogou.
+
+O site verifica o vencimento a cada acesso. A liberação também permite ativar dispositivos e baixar os aplicativos do plano. A conta do cliente mostra o plano liberado e seu prazo. No aplicativo, use Atualizar perfil e assinatura para buscar a alteração; a tolerância offline já existente do aplicativo permanece.

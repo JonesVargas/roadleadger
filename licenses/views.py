@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .models import ApiToken, Device, DeviceCode
+from subscriptions.access import allowed_apps
 
 
 @login_required
@@ -37,11 +38,9 @@ def revoke_device(request, pk):
 def approve_device(request):
     code_value = (request.POST.get("code") or request.GET.get("code") or "").strip().upper()
     if request.method == "POST":
-        has_access = request.user.lifetime_access or request.user.subscriptions.filter(
-            status__in=["active", "authorized"]
-        ).exists()
+        has_access = bool(allowed_apps(request.user))
         if not has_access:
-            messages.error(request, "É necessária uma assinatura ativa ou acesso vitalício.")
+            messages.error(request, "É necessária uma assinatura ativa ou liberação do administrador.")
             return render(request, "licenses/activate.html", {"code": code_value})
         code = DeviceCode.objects.filter(
             user_code=code_value,

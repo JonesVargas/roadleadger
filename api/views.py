@@ -58,7 +58,10 @@ def entitlements(request):
             "active": application in apps if application else bool(apps),
             "apps": list(apps),
             "lifetime": request.user.lifetime_access,
-            "plan": "lifetime" if request.user.lifetime_access else (sub.plan.code if sub else None),
+            "plan": "lifetime" if request.user.lifetime_access else (sub.plan.code if sub else ("manual-" + request.user.manual_plan if request.user.has_manual_access else None)),
+            "manual_access": request.user.has_manual_access,
+            "manual_plan": request.user.manual_plan if request.user.has_manual_access else None,
+            "manual_expires_at": request.user.manual_access_expires_at if request.user.has_manual_access else None,
             "features": ["all"] if request.user.lifetime_access else (sub.plan.entitlements if sub else []),
         }
     )
@@ -69,7 +72,7 @@ def entitlements(request):
 @permission_classes([IsAuthenticated])
 def latest_version(request):
     sub = active_sub(request.user)
-    if not request.user.lifetime_access and not sub:
+    if not allowed_apps(request.user):
         return Response({"detail": "Assinatura ativa necessária."}, status=403)
     application = request.GET.get("app", "offline")
     if application not in APP_LABELS:
@@ -125,7 +128,7 @@ def device_token(request):
         return Response({"error": "authorization_pending"}, status=428)
     if code.consumed_at:
         return Response({"error": "already_used"}, status=400)
-    if not code.approved_by.lifetime_access and not active_sub(code.approved_by):
+    if not allowed_apps(code.approved_by):
         return Response({"error": "subscription_required"}, status=403)
     device_id = request.data.get("device_id") or secrets.token_hex(16)
     device, _created = Device.objects.update_or_create(

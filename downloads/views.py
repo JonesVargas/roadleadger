@@ -4,13 +4,12 @@ from django.shortcuts import get_object_or_404, render
 from django_ratelimit.decorators import ratelimit
 
 from .models import AppVersion, DownloadEvent
-from subscriptions.access import can_download
+from subscriptions.access import can_download, allowed_apps
 
 
 @login_required
 def index(request):
-    sub = request.user.subscriptions.filter(status__in=["active", "authorized"]).first()
-    if not request.user.lifetime_access and not sub:
+    if not allowed_apps(request.user):
         return HttpResponseForbidden("Uma assinatura ativa ou acesso vitalício é necessário.")
     return render(request, "downloads/index.html", {"versions": [v for v in AppVersion.objects.filter(published=True) if can_download(request.user, v)]})
 

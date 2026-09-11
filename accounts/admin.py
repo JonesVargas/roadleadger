@@ -37,6 +37,7 @@ class RoadLedgerUserAdmin(UserAdmin):
             },
         ),
         ("Permissões", {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
+        ("Acesso aos aplicativos", {"fields": ("lifetime_access", "manual_plan", "manual_access_expires_at")}),
         ("Datas", {"fields": ("last_login", "date_joined")}),
     )
     add_fieldsets = (
