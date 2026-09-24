@@ -27,6 +27,8 @@ INSTALLED_APPS = [
     "audit",
     "dashboard",
     "api",
+    "road_sync",
+    "connector_finance",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

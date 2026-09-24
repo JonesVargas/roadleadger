@@ -2,7 +2,7 @@ from urllib.parse import urlparse
 
 from django.db import transaction
 
-from .models import Plan, Subscription
+from .models import Plan, Subscription, PlanChange
 
 
 @transaction.atomic
@@ -11,7 +11,8 @@ def reserve_subscription(user, plan):
     if locked.founder and locked.subscriber_limit:
         used = Subscription.objects.filter(plan=locked, status__in=["authorized", "active"]).count()
         pending = Subscription.objects.filter(plan=locked, status="pending").count()
-        if used + pending >= locked.subscriber_limit:
+        reserved_changes = PlanChange.objects.filter(target_plan=locked, status__in=["pending", "paid"]).count()
+        if used + pending + reserved_changes >= locked.subscriber_limit:
             raise ValueError("As vagas do plano Fundador foram preenchidas.")
     existing = Subscription.objects.filter(
         user=user, status__in=["pending", "authorized", "active", "paused", "past_due"]

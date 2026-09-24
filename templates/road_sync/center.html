@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Sincronização · RoadLedger{% endblock %}
+{% block content %}
+<section class="page-head"><span class="eyebrow">Minha conta</span><h1>Atualizações dos aplicativos</h1>
+<p>Entregas e eventos recebidos pelo site, disponíveis para os aplicativos da sua conta.</p>
+<a class="button ghost" href="{% url 'dashboard:home' %}">Voltar à minha conta</a></section>
+<section class="panel">
+<p id="sync-status" role="status">Conectando às atualizações…</p>
+<p id="sync-empty">Nenhuma atualização recebida ainda.</p>
+<div style="overflow-x:auto"><table><thead><tr><th>Atualização</th><th>Jogo</th><th>Horário</th></tr></thead>
+<tbody id="sync-events" data-stream="{% url 'sync-stream' %}"></tbody></table></div>
+<p>As pendências ainda não enviadas ficam na Central de Sincronização do aplicativo.</p>
+</section>
+<script src="{% static 'js/sync-events.js' %}" defer></script>
+{% endblock %}

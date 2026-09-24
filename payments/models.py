@@ -32,6 +32,7 @@ class PaymentProviderConfig(models.Model):
 
 class Payment(models.Model):
     subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name="payments")
+    renewal_applied = models.BooleanField(default=False)
     provider_payment_id = models.CharField(max_length=120, unique=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=30)

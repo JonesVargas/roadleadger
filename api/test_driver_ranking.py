@@ -1,4 +1,6 @@
 from decimal import Decimal
+from uuid import UUID
+from road_sync.models import OutboxEvent
 from django.utils import timezone
 from .test_companies import CompanyIntegrationTests
 from .ranking import driver_ranking
@@ -12,6 +14,9 @@ class DriverRankingTests(CompanyIntegrationTests):
         self.assertEqual(response.json()["commission"], "700.00")
         self.assertEqual(self.call(self.player, "my/autonomous-deliveries/", payload).status_code, 200)
         self.assertEqual(AutonomousDelivery.objects.count(), 1)
+        event = OutboxEvent.objects.get(envelope__event_type="delivery.settled")
+        self.assertTrue(UUID(event.envelope["correlation_id"]))
+        self.assertEqual(event.envelope["payload"]["commission"], "700.00")
         ranking = driver_ranking()
         self.assertEqual(ranking[0]["deliveries"], 1)
         self.assertEqual(ranking[0]["kilometers"], Decimal("123.456"))

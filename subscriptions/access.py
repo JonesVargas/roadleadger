@@ -3,7 +3,9 @@ APP_LABELS = {"offline": "RoadLedger original (offline)", "player": "RoadLedger 
 PRODUCT_APPS = {"player": ("offline", "player"), "company": ("offline", "player", "company")}
 
 def active_subscription(user):
-    return user.subscriptions.select_related("plan").filter(status__in=["active", "authorized"]).first()
+    from django.db.models import Q
+    from django.utils import timezone
+    return user.subscriptions.select_related("plan").filter(status__in=["active", "authorized"]).filter(Q(current_period_end__isnull=True) | Q(current_period_end__gt=timezone.now())).first()
 
 def allowed_apps(user):
     if not user.is_active:

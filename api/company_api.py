@@ -207,16 +207,20 @@ def contract_profile(contract, game):
 
 @endpoint(["POST"])
 def events(request):
-    serializer = EventInput(data=request.data)
+    return process_freight(request.user, request.data)
+
+
+def process_freight(user, raw):
+    serializer = EventInput(data=raw)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
     payload = dict(serializer.data)
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
     with transaction.atomic():
-        contract = get_object_or_404(EmployeeContract.objects.select_for_update(), pk=data["contract_id"], candidacy__player=request.user)
+        contract = get_object_or_404(EmployeeContract.objects.select_for_update(), pk=data["contract_id"], candidacy__player=user)
         previous = FreightEvent.objects.filter(pk=data["id"]).first()
         if previous:
-            if previous.player_id != request.user.id or previous.digest != digest:
+            if previous.player_id != user.id or previous.digest != digest:
                 raise serializers.ValidationError("Identificador repetido com conteúdo diferente.")
             return Response({"id": previous.id, "status": "received"})
         if not contract.signed_at or contract.ended_at:
@@ -259,8 +263,16 @@ def events(request):
             trip.result.update(gross=str(data["gross"]), game_gross=str(game_gross), pricing_version=VERSION, game=data["game"], speed_limit=rules["speed_limit"], speeding=speeding, fine_count=data["fine_count"], reputation_loss=(rules["speed_reputation_loss"] if speeding else 0) + rules["fine_reputation_loss"] * data["fine_count"], license_points_loss=rules["fine_license_points"] * data["fine_count"])
 
             trip.save()
-        FreightEvent.objects.create(id=data["id"], player=request.user, contract=contract, trip_id=trip.id, payload=payload, digest=digest)
-        audit(contract.candidacy.vacancy.company, request.user, "freight_" + data["kind"], trip.id)
+        FreightEvent.objects.create(id=data["id"], player=user, contract=contract, trip_id=trip.id, payload=payload, digest=digest)
+        audit(contract.candidacy.vacancy.company, user, "freight_" + data["kind"], trip.id)
+        from road_sync.service import publish
+        company = contract.candidacy.vacancy.company
+        publish({"start": "delivery.started", "completed": "delivery.settled",
+                 "cancelled": "delivery.cancelled"}[data["kind"]],
+            user=user, audience=[user.pk, company.owner_id], game=data["game"],
+            company_id=company.pk, correlation_id=trip.id, causation_id=data["id"],
+            payload={"trip_id": str(trip.id), "status": trip.status, "result": trip.result})
+
     return Response({"id": data["id"], "status": "received"}, status=201)
 
 

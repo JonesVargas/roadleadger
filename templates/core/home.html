@@ -35,12 +35,12 @@
 </section>
 <section class="section" aria-labelledby="driver-ranking-title"><article class="card">
 <h2 id="driver-ranking-title">Ranking dos motoristas</h2>
-<p>Mais entregas concluídas, com desempate pela quilometragem. Fretes por conta própria e por empresas contam para o motorista.</p>
+<p>Entregas concluídas definem a posição; quilômetros planejados em entrega, toneladas e XP desempatam. O nível segue a carreira do novo conector.</p>
 {% if driver_ranking %}<div style="overflow-x:auto" tabindex="0" role="region" aria-label="Ranking dos motoristas"><table style="width:100%;text-align:left">
-<thead><tr><th scope="col">Posição</th><th scope="col">Motorista / ID</th><th scope="col">Entregas</th><th scope="col">Quilômetros</th><th scope="col">Propostas</th></tr></thead>
-<tbody>{% for driver in driver_ranking %}<tr><td>{{ forloop.counter }}º</td><th scope="row">{{ driver.name }}<br><small>{{ driver.id }}</small></th><td>{{ driver.deliveries }}</td><td>{{ driver.kilometers|floatformat:"1g" }} km</td><td>{% if driver.open_to_offers %}Aberto a propostas{% else %}Indisponível{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+<thead><tr><th scope="col">Posição</th><th scope="col">Motorista / ID</th><th scope="col">Entregas</th><th scope="col">Km em entregas</th><th scope="col">Peso entregue</th><th scope="col">XP</th><th scope="col">Nível</th><th scope="col">Propostas</th></tr></thead>
+<tbody>{% for driver in driver_ranking %}<tr><td>{{ forloop.counter }}º</td><th scope="row">{{ driver.name }}<br><small>{{ driver.id }}</small></th><td>{{ driver.deliveries }}</td><td>{{ driver.kilometers|floatformat:"1g" }} km</td><td>{% if driver.weight_tons is not None %}{{ driver.weight_tons|floatformat:"1g" }} t{% else %}—{% endif %}</td><td>{% if driver.xp is not None %}{{ driver.xp }} XP{% else %}—{% endif %}</td><td>{% if driver.level is not None %}<span class="badge">{{ driver.level }}</span>{% else %}—{% endif %}</td><td>{% if driver.open_to_offers %}Aberto a propostas{% else %}Indisponível{% endif %}</td></tr>{% endfor %}</tbody></table></div>
 {% else %}<p>Os motoristas aparecerão após sincronizar suas primeiras entregas.</p>{% endif %}
-<small>Localize os jogadores disponíveis pelo nome ou ID. A contratação depende do aceite do jogador.</small>
+<small>Dados do aplicativo antigo podem não incluir peso e XP. A contratação depende do aceite do jogador.</small>
 </article></section>
 <section class="section" aria-labelledby="hiring-title">
   <article class="card">

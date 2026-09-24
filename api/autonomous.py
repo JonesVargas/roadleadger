@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 import json
 from decimal import Decimal, ROUND_HALF_UP
 from django.db import transaction
@@ -46,4 +47,9 @@ def upload(request):
         value = (data["gross"] * Decimal("0.70")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         item = AutonomousDelivery.objects.create(player=request.user, digest=digest, commission=value, **data)
         PlayerRecruitmentProfile.objects.get_or_create(user=request.user)
+        from road_sync.service import publish
+        publish("delivery.settled", user=request.user, audience=[request.user.pk],
+                game=item.game, correlation_id=uuid.uuid5(uuid.NAMESPACE_URL, "roadledger:autonomous:" + str(item.pk)),
+                payload={"autonomous_delivery_id": str(item.pk), "gross": str(item.gross),
+                         "commission": str(value), "distance_km": str(item.distance_km)})
     return Response({"id": item.pk, "commission": str(value)}, status=201)

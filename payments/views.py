@@ -25,12 +25,12 @@ def mercado_pago_webhook(request):
         event_key=event_key,
         defaults={"topic": topic, "resource_id": resource_id, "signature_valid": True, "payload": payload},
     )
-    if not created or event.processed_at:
+    if event.processed_at or (not created and not event.processing_error):
         return JsonResponse({"status": "duplicado"})
     try:
         process_webhook(event)
     except Exception as exc:
         event.processing_error = str(exc)
         event.save(update_fields=["processing_error"])
-        return JsonResponse({"status": "aceito para nova tentativa"}, status=202)
+        return JsonResponse({"status": "aguardando nova tentativa"}, status=503)
     return JsonResponse({"status": "processado"})
