@@ -1,7 +1,7 @@
 import uuid
 from django.test import TestCase
 from django.utils import timezone
-from accounts.models import User
+from accounts.models import User, CompanyOwnershipLicense
 from licenses.models import ApiToken
 from .models import VirtualCompany, Vacancy, Candidacy, EmployeeContract, OnlineFreight, FreightEvent
 from .company_api import DEFAULT_RULES
@@ -13,6 +13,8 @@ class CompanyIntegrationTests(TestCase):
         self.owner = User.objects.create_user("owner@example.com", "test-pass", lifetime_access=True)
         self.player = User.objects.create_user("player@example.com", "test-pass", full_name="Ana")
         self.other = User.objects.create_user("other@example.com", "test-pass", lifetime_access=True)
+        CompanyOwnershipLicense.objects.create(user=self.owner, source="administrative")
+        CompanyOwnershipLicense.objects.create(user=self.other, source="administrative")
         self.tokens = {u.pk: ApiToken.issue(u)[1] for u in (self.owner, self.player, self.other)}
         self.company = VirtualCompany.objects.create(owner=self.owner, name="Empresa A", game="ETS2", capacity=10, rules=DEFAULT_RULES.copy())
         self.vacancy = Vacancy.objects.create(company=self.company, title="Motorista", description="Teste", quantity=1)

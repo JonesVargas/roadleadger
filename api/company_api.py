@@ -1,5 +1,6 @@
 from functools import wraps
 from subscriptions.access import allowed_apps
+from .company_access import can_own_company, has_company_permission
 import hashlib
 import json
 from decimal import Decimal, ROUND_HALF_UP
@@ -16,12 +17,14 @@ from .models import VirtualCompany, Vacancy, Candidacy, EmployeeContract, Freigh
 DEFAULT_RULES = {"damage_limit": 5, "damage_discount_percent": 10, "speed_limit": 90, "speed_reputation_loss": 5, "fine_reputation_loss": 5, "fine_license_points": 7}
 
 
-def endpoint(methods, app=None):
+def endpoint(methods, app=None, owner=False):
     def wrap(func):
         @wraps(func)
         def authorized(request, *args, **kwargs):
             if app and app not in allowed_apps(request.user):
-                return Response({"detail": "O plano Empresa Virtual é necessário para gerenciar empresas."}, status=403)
+                return Response({"detail": "Assinatura ativa do RoadLedger Player necessária."}, status=403)
+            if owner and not can_own_company(request.user):
+                return Response({"detail": "Licença de proprietário e assinatura ativa necessárias."}, status=403)
             return func(request, *args, **kwargs)
         return api_view(methods)(authentication_classes([HashedTokenAuthentication])(permission_classes([IsAuthenticated])(authorized)))
     return wrap
@@ -45,23 +48,26 @@ def integer(data, key, default, minimum, maximum):
     return value
 
 
-@endpoint(["GET", "POST"], app="company")
+@endpoint(["GET", "POST"], app="player", owner=True)
 def companies(request):
     if request.method == "POST":
         name, game = text(request.data, "name"), text(request.data, "game")
         if game not in ("ETS2", "ATS"):
             raise serializers.ValidationError("Jogo inválido.")
         with transaction.atomic():
+            type(request.user).objects.select_for_update().get(pk=request.user.pk)
+            if VirtualCompany.objects.filter(owner=request.user, legacy=False).exists():
+                return Response({"detail": "Esta conta já possui uma empresa."}, status=409)
             company = VirtualCompany.objects.create(owner=request.user, name=name, game=game, rules=DEFAULT_RULES.copy())
             audit(company, request.user, "created", company.id)
         return Response({"id": company.id, "capacity": 0}, status=201)
-    return Response(list(VirtualCompany.objects.filter(owner=request.user).values("id", "name", "game", "capacity", "rules")))
+    return Response(list(VirtualCompany.objects.filter(owner=request.user, legacy=False).values("id", "name", "game", "capacity", "rules")))
 
 
-@endpoint(["PUT"], app="company")
+@endpoint(["PUT"], app="player", owner=True)
 def rules(request, company_id):
     with transaction.atomic():
-        company = get_object_or_404(VirtualCompany.objects.select_for_update(), pk=company_id, owner=request.user)
+        company = get_object_or_404(VirtualCompany.objects.select_for_update(), pk=company_id, owner=request.user, legacy=False)
         company.rules = {k: integer(request.data, k, v, 1 if k == "speed_limit" else 0, 300 if k == "speed_limit" else 100) for k, v in DEFAULT_RULES.items()}
         company.save(update_fields=["rules"])
         audit(company, request.user, "rules_changed", company.id)
@@ -70,10 +76,10 @@ def rules(request, company_id):
 
 @endpoint(["GET", "POST"])
 def vacancies(request, company_id=None):
-    if request.method == "POST" and "company" not in allowed_apps(request.user):
-        return Response({"detail": "O plano Empresa Virtual é necessário para publicar vagas."}, status=403)
+    if request.method == "POST" and not can_own_company(request.user):
+        return Response({"detail": "Licença de proprietário e assinatura ativa necessárias."}, status=403)
     if request.method == "POST":
-        company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
+        company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user, legacy=False)
         with transaction.atomic():
             vacancy = Vacancy.objects.create(company=company, title=text(request.data, "title"), description=text(request.data, "description", 4000), quantity=integer(request.data, "quantity", 1, 1, 1000))
             audit(company, request.user, "vacancy_created", vacancy.id)
@@ -96,7 +102,7 @@ def apply(request, vacancy_id):
     if type(own) is not bool:
         raise serializers.ValidationError("Caminhão próprio inválido.")
     with transaction.atomic():
-        vacancy = get_object_or_404(Vacancy.objects.select_for_update(), pk=vacancy_id, open=True)
+        vacancy = get_object_or_404(Vacancy.objects.select_for_update(), pk=vacancy_id, company__legacy=False, open=True)
         if vacancy.company.owner_id == request.user.id:
             raise serializers.ValidationError("O proprietário não pode se candidatar.")
         candidate, created = Candidacy.objects.get_or_create(vacancy=vacancy, player=request.user, defaults={"own_truck": own})
@@ -105,16 +111,16 @@ def apply(request, vacancy_id):
     return Response({"id": candidate.id, "status": candidate.status}, status=201 if created else 200)
 
 
-@endpoint(["GET"], app="company")
+@endpoint(["GET"], app="player", owner=True)
 def applications(request, company_id):
-    company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
+    company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user, legacy=False)
     return Response(list(Candidacy.objects.filter(vacancy__company=company).values("id", "player__full_name", "vacancy_id", "vacancy__title", "own_truck", "status")[:200]))
 
 
-@endpoint(["POST"], app="company")
+@endpoint(["POST"], app="player", owner=True)
 def offer(request, candidate_id):
     with transaction.atomic():
-        candidate = get_object_or_404(Candidacy.objects.select_for_update().select_related("vacancy__company"), pk=candidate_id, vacancy__company__owner=request.user)
+        candidate = get_object_or_404(Candidacy.objects.select_for_update().select_related("vacancy__company"), pk=candidate_id, vacancy__company__owner=request.user, vacancy__company__legacy=False)
         if candidate.status != "pending" or not candidate.vacancy.open:
             raise serializers.ValidationError("Candidatura indisponível.")
         company = candidate.vacancy.company
@@ -164,11 +170,11 @@ def sign_contract(user, contract_id):
     return {"status": "signed"}
 
 
-@endpoint(["POST"], app="company")
+@endpoint(["POST"], app="player", owner=True)
 def dismiss(request, contract_id):
     reason = text(request.data, "reason", 1000)
     with transaction.atomic():
-        contract = get_object_or_404(EmployeeContract.objects.select_for_update(), pk=contract_id, candidacy__vacancy__company__owner=request.user, ended_at__isnull=True)
+        contract = get_object_or_404(EmployeeContract.objects.select_for_update(), pk=contract_id, candidacy__vacancy__company__owner=request.user, candidacy__vacancy__company__legacy=False, ended_at__isnull=True)
         if OnlineFreight.objects.filter(contract=contract, status="active").exists():
             raise serializers.ValidationError("Existe frete em andamento.")
         contract.ended_at = timezone.now()
@@ -282,17 +288,19 @@ def settlements(request):
     return Response(list(OnlineFreight.objects.filter(contract__candidacy__player=request.user).filter(status__in=["completed", "cancelled"]).order_by("ended_at", "id").values("id", "game", "status", "result", "ended_at")[offset:offset + 200]))
 
 
-@endpoint(["GET"], app="company")
+@endpoint(["GET"], app="player")
 def company_freights(request, company_id):
-    company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
+    company = get_object_or_404(VirtualCompany, pk=company_id, legacy=False)
+    if not has_company_permission(request.user, company, "view_finances"):
+        return Response({"detail": "Sem acesso a estes dados."}, status=403)
     offset = serializers.IntegerField(min_value=0, max_value=1000000).run_validation(request.query_params.get("offset", "0"))
     return Response(list(OnlineFreight.objects.filter(contract__candidacy__vacancy__company=company).exclude(status="archived").order_by("started_at", "id").values("id", "game", "contract_id", "contract__candidacy__player__full_name", "status", "result", "started_at", "ended_at")[offset:offset + 200]))
 
 
-@endpoint(["POST"], app="company")
+@endpoint(["POST"], app="player", owner=True)
 def reject_application(request, candidate_id):
     with transaction.atomic():
-        candidate = get_object_or_404(Candidacy.objects.select_for_update(), pk=candidate_id, vacancy__company__owner=request.user)
+        candidate = get_object_or_404(Candidacy.objects.select_for_update(), pk=candidate_id, vacancy__company__owner=request.user, vacancy__company__legacy=False)
         if candidate.status != "pending":
             raise serializers.ValidationError("Esta candidatura já foi avaliada.")
         candidate.status = "declined"
@@ -301,9 +309,11 @@ def reject_application(request, candidate_id):
     return Response({"status": candidate.status})
 
 
-@endpoint(["GET"], app="company")
+@endpoint(["GET"], app="player")
 def employees(request, company_id):
-    company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
+    company = get_object_or_404(VirtualCompany, pk=company_id, legacy=False)
+    if not has_company_permission(request.user, company, "view_members"):
+        return Response({"detail": "Sem acesso a estes dados."}, status=403)
     return Response(list(EmployeeContract.objects.filter(candidacy__vacancy__company=company, signed_at__isnull=False).values("id", "candidacy__player_id", "candidacy__player__full_name", "candidacy__own_truck", "candidacy__vacancy__title", "terms", "signed_at", "ended_at", "reputation", "license_points")))
 
 
@@ -313,7 +323,9 @@ def archive_history(request):
     if request.data.get("confirm") != "archive_keep_balances":
         raise serializers.ValidationError("Confirme a limpeza do histórico preservando pagamentos.")
     with transaction.atomic():
-        company_count = OnlineFreight.objects.filter(contract__candidacy__vacancy__company__owner=request.user, status__in=["completed", "cancelled"]).update(status="archived")
+        company_count = (OnlineFreight.objects.filter(contract__candidacy__vacancy__company__owner=request.user,
+            contract__candidacy__vacancy__company__legacy=False, status__in=["completed", "cancelled"]).update(status="archived")
+            if can_own_company(request.user) else 0)
         player_count = OnlineFreight.objects.filter(contract__candidacy__player=request.user, status__in=["completed", "cancelled"]).update(status="archived")
         autonomous = AutonomousDelivery.objects.filter(player=request.user, archived=False).update(archived=True)
     return Response(dict(company_freights=company_count, player_freights=player_count, autonomous=autonomous))

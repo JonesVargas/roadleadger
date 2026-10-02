@@ -32,8 +32,8 @@ class ManualAccessTests(TestCase):
         self.assertFalse(Subscription.objects.filter(user=self.player).exists())
         self.assertFalse(self.player.lifetime_access)
         self.assertTrue(self.api("entitlements/?app=company").json()["active"])
-        self.assertEqual(self.api("my/company-backup/").status_code, 200)
-        self.assertEqual(self.api("companies/").status_code, 200)
+        self.assertEqual(self.api("my/company-backup/").status_code, 403)
+        self.assertEqual(self.api("companies/").status_code, 403)
         self.assertEqual(self.api("versions/latest/?app=company").status_code, 404) # entitled; no release yet
         version = AppVersion(application="company", min_plan_codes=["special"])
         self.assertTrue(can_download(self.player, version))

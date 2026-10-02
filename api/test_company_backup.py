@@ -1,7 +1,7 @@
 import base64
 import hashlib
 from django.test import TestCase
-from accounts.models import User
+from accounts.models import User, CompanyOwnershipLicense
 from licenses.models import ApiToken
 from .models import VirtualCompany, CompanyCloudBackup
 
@@ -9,6 +9,8 @@ class CompanyBackupTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(email="backup@company.test", password="test-password", lifetime_access=True)
         self.other = User.objects.create_user(email="other@company.test", password="test-password", lifetime_access=True)
+        CompanyOwnershipLicense.objects.create(user=self.owner, source="administrative")
+        CompanyOwnershipLicense.objects.create(user=self.other, source="administrative")
         self.company = VirtualCompany.objects.create(owner=self.owner, name="Empresa", game="ETS2")
         self.tokens = {user.id: ApiToken.issue(user)[1] for user in (self.owner, self.other)}
         content = b"test-private-company-backup"

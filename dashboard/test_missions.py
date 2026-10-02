@@ -1,7 +1,7 @@
 from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
-from accounts.models import User
+from accounts.models import User, CompanyOwnershipLicense
 from api.models import OfficialMission, MissionMap, VirtualCompany
 from licenses.models import ApiToken
 
@@ -43,6 +43,7 @@ class MissionTests(TestCase):
         self.assertFalse(OfficialMission.objects.exists())
 
     def test_owner_catalog_publication_dates_and_isolation(self):
+        CompanyOwnershipLicense.objects.create(user=self.owner, source="administrative")
         company = VirtualCompany.objects.create(owner=self.owner, name="Empresa", game="ETS2")
         now = timezone.now()
         args = dict(description="Teste", game="ETS2", map=self.map, starts_at=now-timedelta(days=1), ends_at=now+timedelta(days=1), reward_money=100)
@@ -55,4 +56,4 @@ class MissionTests(TestCase):
         response = self.client.get(url, HTTP_AUTHORIZATION="Bearer " + token)
         self.assertEqual([m["title"] for m in response.json()], ["Disponível"])
         other = ApiToken.issue(self.admin)[1]
-        self.assertEqual(self.client.get(url, HTTP_AUTHORIZATION="Bearer " + other).status_code, 404)
+        self.assertEqual(self.client.get(url, HTTP_AUTHORIZATION="Bearer " + other).status_code, 403)

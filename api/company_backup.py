@@ -10,10 +10,10 @@ from .models import CompanyCloudBackup, VirtualCompany
 
 MAX_BACKUP_BYTES = 1_500_000
 
-@endpoint(["GET", "POST"], app="company")
+@endpoint(["GET", "POST"], app="player", owner=True)
 def backup(request):
     if request.method == "GET":
-        row = CompanyCloudBackup.objects.filter(owner=request.user).select_related("company").first()
+        row = CompanyCloudBackup.objects.filter(owner=request.user, company__legacy=False).select_related("company").first()
         if not row:
             return Response({"available": False, "revision": 0})
         result = dict(available=True, revision=row.revision, company_id=row.company_id, company_name=row.company.name, updated_at=row.updated_at, sha256=row.sha256)
@@ -35,9 +35,9 @@ def backup(request):
         raise serializers.ValidationError("Revisão inválida.")
     with transaction.atomic():
         type(request.user).objects.select_for_update().get(pk=request.user.pk)
-        company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
-        row = CompanyCloudBackup.objects.filter(owner=request.user).first()
+        company = get_object_or_404(VirtualCompany, pk=company_id, owner=request.user, legacy=False)
+        row = CompanyCloudBackup.objects.filter(owner=request.user, company__legacy=False).first()
         if (row.revision if row else 0) != revision or (row and row.company_id != company.id):
             return Response({"detail": "Existe um backup mais recente ou de outra empresa nesta conta. Restaure-o antes de enviar novos dados."}, status=409)
-        row, _ = CompanyCloudBackup.objects.update_or_create(owner=request.user, defaults=dict(company=company, content=content, sha256=hashlib.sha256(content).hexdigest(), revision=revision+1))
+        row, _ = CompanyCloudBackup.objects.update_or_create(owner=request.user, company=company, defaults=dict(content=content, sha256=hashlib.sha256(content).hexdigest(), revision=revision+1))
     return Response({"revision": row.revision, "updated_at": row.updated_at})

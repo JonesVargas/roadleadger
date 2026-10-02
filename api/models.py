@@ -6,10 +6,28 @@ from django.db import models
 class VirtualCompany(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    legacy = models.BooleanField(default=False)
     name = models.CharField(max_length=150)
     game = models.CharField(max_length=4)
     capacity = models.PositiveIntegerField(default=0)
     rules = models.JSONField(default=dict)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['owner'], condition=models.Q(legacy=False), name='one_current_company_per_owner')]
+
+
+class CompanyMembership(models.Model):
+    company = models.ForeignKey(VirtualCompany, on_delete=models.PROTECT, related_name='memberships')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='company_memberships')
+    role = models.CharField(max_length=20, choices=[('driver', 'Motorista'), ('manager', 'Gerente')])
+    permissions = models.JSONField(default=list)
+    active = models.BooleanField(default=True)
+    granted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['company', 'user'], name='one_company_membership_per_user')]
 
 
 class Vacancy(models.Model):
@@ -164,9 +182,11 @@ class OfficialMission(models.Model):
 
 
 class CompanyCloudBackup(models.Model):
-    owner = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     company = models.ForeignKey(VirtualCompany, on_delete=models.PROTECT)
     content = models.BinaryField()
     sha256 = models.CharField(max_length=64)
     revision = models.PositiveIntegerField(default=1)
     updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['owner', 'company'], name='one_backup_per_company')]

@@ -16,7 +16,7 @@ class CompanyResetTests(TestCase):
         plan = Plan.objects.get(code="player-mensal")
         sub = Subscription.objects.create(user=player, plan=plan, status="active")
         for name in ["Empresa A", "Empresa B"]:
-            company = VirtualCompany.objects.create(owner=owner, name=name, game="ETS2")
+            company = VirtualCompany.objects.create(owner=owner, name=name, game="ETS2", legacy=True)
             vacancy = Vacancy.objects.create(company=company, title="Motorista")
             candidate = Candidacy.objects.create(vacancy=vacancy, player=player)
             contract = EmployeeContract.objects.create(candidacy=candidate, terms={})

@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
-from accounts.models import User
+from accounts.models import User, CompanyOwnershipLicense
 from audit.models import AuditEvent
 from core.models import FAQ, Feature, LegalPage, ServiceStatus, SocialLink, UpdatePost
 from downloads.models import AppVersion, DownloadEvent
@@ -48,8 +48,9 @@ def home(request):
             if version_allowed(request.user, version)
         ][:10]
     return render(request, "dashboard/home.html", {
-        "company_backup": CompanyCloudBackup.objects.filter(owner=request.user).select_related("company").defer("content").first(),
-        "owned_companies": VirtualCompany.objects.filter(owner=request.user),
+        "company_backup": CompanyCloudBackup.objects.filter(owner=request.user, company__legacy=False).select_related("company").defer("content").first(),
+        "owned_companies": VirtualCompany.objects.filter(owner=request.user, legacy=False),
+        "company_license": CompanyOwnershipLicense.objects.filter(user=request.user).first(),
         "subscription": sub,
         "devices": request.user.devices.filter(revoked_at__isnull=True),
         "versions": versions,
@@ -274,6 +275,43 @@ def manager_subscription_status(request, subscription_id):
             subscription.save(update_fields=["status", "updated_at"])
             AuditEvent.objects.create(actor=request.user, action="manager.subscription.status", target=f"Subscription#{subscription.pk}", metadata={"status": status})
             messages.success(request, "Situação da assinatura atualizada.")
+    return redirect(_manager_url("clientes"))
+
+
+@superuser_required
+def manager_company_license(request, user_id):
+    if request.method != "POST":
+        return redirect(_manager_url("clientes"))
+    action = request.POST.get("action")
+    reason = request.POST.get("reason", "").strip()[:500]
+    if action not in {"grant", "revoke", "reactivate"} or not reason:
+        messages.error(request, "Informe a ação e o motivo da alteração da licença.")
+        return redirect(_manager_url("clientes"))
+    with transaction.atomic():
+        customer = get_object_or_404(User.objects.select_for_update(), pk=user_id)
+        license = CompanyOwnershipLicense.objects.select_for_update().filter(user=customer).first()
+        previous = license.status if license else "absent"
+        if action == "grant" and license is None:
+            license = CompanyOwnershipLicense.objects.create(user=customer, status="active",
+                source="administrative", granted_by=request.user)
+        elif action == "revoke" and license and license.status == "active":
+            license.status = "revoked"
+            license.revoked_at = timezone.now()
+            license.save(update_fields=["status", "revoked_at", "updated_at"])
+        elif action == "reactivate" and license and license.status == "revoked":
+            license.status = "active"
+            license.revoked_at = None
+            license.save(update_fields=["status", "revoked_at", "updated_at"])
+        elif action == "grant" and license and license.status == "active":
+            messages.info(request, "A licença já está ativa; nenhuma segunda licença foi criada.")
+            return redirect(_manager_url("clientes"))
+        else:
+            messages.error(request, "Essa ação não corresponde ao estado da licença.")
+            return redirect(_manager_url("clientes"))
+        AuditEvent.objects.create(actor=request.user, action="manager.company_license." + action,
+            target=f"User#{customer.pk}", metadata={"previous": previous, "current": license.status,
+                "reason": reason, "source": "administrative", "license_id": license.pk})
+    messages.success(request, "Licença de proprietário atualizada. Nenhum pagamento foi registrado.")
     return redirect(_manager_url("clientes"))
 
 

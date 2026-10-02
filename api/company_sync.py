@@ -19,7 +19,7 @@ class CompanyInput(serializers.Serializer):
     rules = serializers.DictField()
     vacancies = VacancyInput(many=True, max_length=1000)
 
-@endpoint(["POST"], app="company")
+@endpoint(["POST"], app="player", owner=True)
 def synchronize(request):
     serializer = CompanyInput(data=request.data)
     serializer.is_valid(raise_exception=True)
@@ -30,9 +30,13 @@ def synchronize(request):
         link = CompanyDesktopLink.objects.filter(owner=request.user, local_id=data["local_id"]).first()
         if link:
             company = VirtualCompany.objects.select_for_update().get(pk=link.company_id)
+            if company.legacy:
+                raise serializers.ValidationError("Empresa do aplicativo anterior arquivada. Crie a empresa no Connect.")
             if company.game != data["game"]:
                 raise serializers.ValidationError("Não altere o jogo de uma empresa já vinculada.")
         else:
+            if VirtualCompany.objects.filter(owner=request.user, legacy=False).exists():
+                raise serializers.ValidationError("Esta conta já possui uma empresa.")
             company = VirtualCompany.objects.create(owner=request.user, name=data["name"], game=data["game"])
             CompanyDesktopLink.objects.create(owner=request.user, local_id=data["local_id"], company=company)
         active = EmployeeContract.objects.filter(candidacy__vacancy__company=company, signed_at__isnull=False, ended_at__isnull=True).count()

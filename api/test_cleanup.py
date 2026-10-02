@@ -12,7 +12,7 @@ class CleanupTests(TestCase):
         other = User.objects.create_user(id=99, email="preserved@example.test", full_name="Preservado")
         mod = importlib.import_module("api.migrations.0010_remove_authorized_test_accounts")
         for ident, name in mod.COMPANIES.items():
-            company = VirtualCompany.objects.create(id=ident, name=name, owner=owner, game="ETS2")
+            company = VirtualCompany.objects.create(id=ident, name=name, owner=owner, game="ETS2", legacy=True)
             vacancy = Vacancy.objects.create(company=company, title="Motorista")
             candidacy = Candidacy.objects.create(vacancy=vacancy, player=player)
             EmployeeContract.objects.create(candidacy=candidacy, terms={})

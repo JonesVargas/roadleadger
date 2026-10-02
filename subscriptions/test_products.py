@@ -5,7 +5,7 @@ from django.apps import apps
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
-from accounts.models import User
+from accounts.models import User, CompanyOwnershipLicense
 from licenses.models import ApiToken
 from downloads.models import AppVersion
 from dashboard.forms import PlanForm, AppVersionForm
@@ -54,6 +54,8 @@ class ProductAccessTests(TestCase):
         self.assertEqual(set(self.api("entitlements/?app=company").json()["apps"]), set(self.versions))
         for app, version in self.versions.items():
             self.assertEqual(self.client.get(reverse("downloads:file", args=[version.pk])).status_code, 200)
+        self.assertEqual(self.api("companies/").status_code, 403)
+        CompanyOwnershipLicense.objects.create(user=self.user, source="administrative")
         self.assertEqual(self.api("companies/").status_code, 200)
 
     def test_expired_and_pending_plans_do_not_unlock_apps(self):
@@ -79,6 +81,8 @@ class ProductAccessTests(TestCase):
         self.user.lifetime_access = True
         self.user.save()
         self.assertTrue(self.api("entitlements/?app=company").json()["active"])
+        self.assertEqual(self.api("companies/").status_code, 403)
+        CompanyOwnershipLicense.objects.create(user=self.user, source="administrative")
         self.assertEqual(self.api("companies/").status_code, 200)
 
     def test_manager_can_create_typed_plan(self):

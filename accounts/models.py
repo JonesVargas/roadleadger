@@ -47,3 +47,14 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+class CompanyOwnershipLicense(models.Model):
+    """One permanent ownership grant per site account; subscription is checked separately."""
+    user = models.OneToOneField('accounts.User', on_delete=models.PROTECT, related_name='company_ownership_license')
+    status = models.CharField(max_length=12, choices=[('active', 'Ativa'), ('revoked', 'Revogada')], default='active')
+    source = models.CharField(max_length=20, choices=[('administrative', 'Administrativa')], default='administrative')
+    granted_at = models.DateTimeField(auto_now_add=True)
+    granted_by = models.ForeignKey('accounts.User', null=True, on_delete=models.SET_NULL, related_name='+')
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)

@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.utils import timezone
-from accounts.models import User
+from accounts.models import User, CompanyOwnershipLicense
 from .models import VirtualCompany, Vacancy, Candidacy, EmployeeContract
 from .job_board import hiring_companies
 
@@ -38,7 +38,8 @@ class JobBoardTests(TestCase):
         company = VirtualCompany.objects.create(owner=owner, name="Transportes Aurora", game="ETS2", capacity=2)
         vacancy = Vacancy.objects.create(company=company, title="Motorista", quantity=5)
         Vacancy.objects.create(company=company, title="Fechada", open=False)
-        other = VirtualCompany.objects.create(owner=owner, name="Outra", game="ATS", capacity=2)
+        other_owner = User.objects.create_user("other-owner@board.test", "test", lifetime_access=True)
+        other = VirtualCompany.objects.create(owner=other_owner, name="Outra", game="ATS", capacity=2)
         Vacancy.objects.create(company=other, title="Motorista")
         client = APIClient()
         self.assertEqual(client.get("/api/v1/vacancies/").status_code, 403)
@@ -59,6 +60,7 @@ class JobBoardTests(TestCase):
         from rest_framework.test import APIClient
         owner = User.objects.create_user("offer-owner@board.test", "test", lifetime_access=True)
         player = User.objects.create_user("offer-player@board.test", "test")
+        CompanyOwnershipLicense.objects.create(user=owner, source="administrative")
         company = VirtualCompany.objects.create(owner=owner, name="Aurora", game="ETS2", capacity=2)
         vacancy = Vacancy.objects.create(company=company, title="Motorista")
         client = APIClient()
@@ -88,6 +90,7 @@ class JobBoardTests(TestCase):
         from rest_framework.test import APIClient
         owner = User.objects.create_user("staff-owner@board.test", "test", lifetime_access=True)
         player = User.objects.create_user("staff-player@board.test", "test")
+        CompanyOwnershipLicense.objects.create(user=owner, source="administrative")
         company = VirtualCompany.objects.create(owner=owner, name="Aurora", game="ETS2", capacity=2)
         vacancy = Vacancy.objects.create(company=company, title="Motorista")
         candidate = Candidacy.objects.create(vacancy=vacancy, player=player)

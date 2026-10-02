@@ -21,9 +21,9 @@ def profile(request):
     return Response({"id": item.id, "name": request.user.full_name, "open_to_offers": item.open_to_offers})
 
 
-@endpoint(["GET"], app="company")
+@endpoint(["GET"], app="player", owner=True)
 def players(request, company_id):
-    get_object_or_404(VirtualCompany, pk=company_id, owner=request.user)
+    get_object_or_404(VirtualCompany, pk=company_id, owner=request.user, legacy=False)
     query = request.query_params.get("q", "").strip()
     if len(query) < 2 or len(query) > 150:
         raise serializers.ValidationError("Digite pelo menos dois caracteres do nome ou o ID do player.")
@@ -37,7 +37,7 @@ def players(request, company_id):
     return Response([{"id": r.id, "name": r.user.full_name} for r in rows.select_related("user")])
 
 
-@endpoint(["POST"], app="company")
+@endpoint(["POST"], app="player", owner=True)
 def send(request, company_id):
     class Input(serializers.Serializer):
         player_id = serializers.UUIDField()
@@ -46,7 +46,7 @@ def send(request, company_id):
     data = Input(data=request.data)
     data.is_valid(raise_exception=True)
     with transaction.atomic():
-        company = get_object_or_404(VirtualCompany.objects.select_for_update(), pk=company_id, owner=request.user)
+        company = get_object_or_404(VirtualCompany.objects.select_for_update(), pk=company_id, owner=request.user, legacy=False)
         player = get_object_or_404(PlayerRecruitmentProfile.objects.select_for_update(), pk=data.validated_data["player_id"], open_to_offers=True)
         if player.user_id == request.user.id:
             raise serializers.ValidationError("O proprietário não pode convidar a si mesmo.")

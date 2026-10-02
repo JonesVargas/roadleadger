@@ -1,4 +1,4 @@
-from . import company_api, recruitment, autonomous, company_sync, missions, company_backup
+from . import company_api, recruitment, autonomous, company_sync, missions, company_backup, company_portal
 from django.urls import path
 
 from . import views
@@ -16,6 +16,10 @@ urlpatterns = [
     path("v1/my/job-offers/<uuid:offer_id>/respond/", recruitment.respond),
     path("v1/companies/<uuid:company_id>/players/", recruitment.players),
     path("v1/companies/<uuid:company_id>/job-offers/", recruitment.send),
+    path("v1/my/company-access/", company_portal.access_state),
+    path("v1/companies/<uuid:company_id>/summary/", company_portal.summary),
+    path("v1/companies/<uuid:company_id>/members/", company_portal.members),
+    path("v1/companies/<uuid:company_id>/members/<int:user_id>/revoke/", company_portal.revoke_member),
     path("v1/companies/", company_api.companies),
     path("v1/companies/<uuid:company_id>/rules/", company_api.rules),
     path("v1/companies/<uuid:company_id>/employees/", company_api.employees),
