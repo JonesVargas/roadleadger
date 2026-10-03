@@ -8,7 +8,7 @@ from accounts.models import User, CompanyOwnershipLicense
 from audit.models import AuditEvent
 from licenses.models import ApiToken
 from subscriptions.models import Plan, Subscription
-from .models import CompanyMembership, VirtualCompany, CompanyCloudBackup
+from .models import CompanyMembership, VirtualCompany, CompanyCloudBackup, Vacancy, Candidacy, EmployeeContract
 
 
 class ConnectCompanyAccessTests(TestCase):
@@ -48,6 +48,13 @@ class ConnectCompanyAccessTests(TestCase):
         created=self.api(self.owner,'companies/',{'name':'Nova','game':'ETS2'})
         self.assertEqual(created.status_code,201,created.content)
         company=VirtualCompany.objects.get(owner=self.owner,legacy=False)
+        self.assertEqual(len(company.fictitious_cnpj), 18)
+        self.assertEqual(created.json()['company_balance'], '0.00')
+        from road_sync.models import VirtualAccount, VirtualEntry
+        wallet = VirtualAccount.objects.get(company=company)
+        self.assertEqual(VirtualEntry.objects.filter(account=wallet).count(), 0)
+        self.assertEqual(self.api(self.owner,'companies/',{'name':'Nova','game':'ETS2'}).status_code,200)
+        self.assertEqual(VirtualAccount.objects.filter(company=company).count(), 1)
         self.assertEqual(self.api(self.owner,'companies/',{'name':'Outra','game':'ATS'}).status_code,409)
         self.sub.status='past_due'
         self.sub.save()
@@ -66,6 +73,27 @@ class ConnectCompanyAccessTests(TestCase):
         self.assertEqual(self.api(self.owner,'companies/').status_code,200)
         self.assertEqual(AuditEvent.objects.filter(action__startswith='manager.company_license.').count(),3)
 
+    def test_owner_configures_work_terms_and_member_cannot(self):
+        self.admin_action('grant')
+        company_id=self.api(self.owner,'companies/',{'name':'Nova','game':'ETS2'}).json()['id']
+        path=f'companies/{company_id}/work-terms/'
+        self.assertFalse(self.api(self.owner,path).json()['configured'])
+        payload={'driver_share_percent':72,'work_speed_limit_kmh':88,
+                 'fuel_allowance_per_4km_cents':160}
+        self.assertEqual(self.client.put('/api/v1/'+path, data=payload,
+            content_type='application/json',
+            HTTP_AUTHORIZATION='Bearer '+self.tokens[self.driver.pk]).status_code,403)
+        response=self.client.put('/api/v1/'+path, data=payload,
+            content_type='application/json',
+            HTTP_AUTHORIZATION='Bearer '+self.tokens[self.owner.pk])
+        self.assertEqual(response.status_code,200,response.content)
+        self.assertEqual(response.json()['fuel_allowance_per_4km_cents'],160)
+        self.sub.status='past_due'
+        self.sub.save()
+        self.assertEqual(self.client.put('/api/v1/'+path, data=payload,
+            content_type='application/json',
+            HTTP_AUTHORIZATION='Bearer '+self.tokens[self.owner.pk]).status_code,403)
+
     def test_player_cannot_grant_and_roles_are_limited(self):
         url=reverse('dashboard:manager_company_license',args=[self.owner.pk])
         self.client.force_login(self.owner)
@@ -73,6 +101,10 @@ class ConnectCompanyAccessTests(TestCase):
         self.assertFalse(CompanyOwnershipLicense.objects.filter(user=self.owner).exists())
         self.admin_action('grant')
         company_id=self.api(self.owner,'companies/',{'name':'Nova','game':'ETS2'}).json()['id']
+        company=VirtualCompany.objects.get(pk=company_id)
+        vacancy=Vacancy.objects.create(company=company,title='Motorista')
+        candidate=Candidacy.objects.create(vacancy=vacancy,player=self.driver,status='hired')
+        EmployeeContract.objects.create(candidacy=candidate,terms={},signed_at=timezone.now())
         path=f'companies/{company_id}/members/'
         self.assertEqual(self.api(self.driver,path,{'email':self.stranger.email,'role':'manager','permissions':['view_missions']}).status_code,403)
         response=self.api(self.owner,path,{'email':self.driver.email,'role':'driver','permissions':['view_missions']})

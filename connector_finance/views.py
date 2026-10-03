@@ -5,6 +5,8 @@ from rest_framework import serializers
 from rest_framework.response import Response
 
 from api.company_api import endpoint
+from api.company_access import player_access
+from api.models import CompanyFreight
 from .models import ConnectorAccount, ConnectorTransaction
 
 
@@ -24,8 +26,12 @@ class TransactionInput(serializers.Serializer):
         return value
 
 
-@endpoint(["GET", "POST"], app="player")
+@endpoint(["GET", "POST"])
 def ledger(request):
+    if not player_access(request.user) and not (
+        request.method == "POST" and CompanyFreight.objects.filter(
+            driver=request.user, status="active").exists()):
+        return Response({"detail": "Assinatura ativa necessária."}, status=403)
     if request.method == "GET":
         rows = ConnectorAccount.objects.filter(user=request.user).order_by("id")
         return Response([{

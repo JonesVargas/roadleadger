@@ -10,7 +10,8 @@ from rest_framework import serializers
 from rest_framework.response import Response
 
 from api.company_api import endpoint
-from api.models import PlayerRecruitmentProfile
+from api.models import PlayerRecruitmentProfile, CompanyFreight
+from api.company_access import player_access
 from .models import ConnectorDelivery, ConnectorDriverProgress
 
 
@@ -30,17 +31,29 @@ class DeliveryInput(serializers.Serializer):
     local_delivery_id = serializers.CharField(max_length=200)
     game = serializers.ChoiceField(choices=["ETS2", "ATS"])
     cargo = serializers.CharField(max_length=150)
+    destination = serializers.CharField(max_length=150, allow_blank=True, required=False)
+    company_id = serializers.UUIDField(allow_null=True, required=False)
     planned_km = serializers.IntegerField(min_value=1, max_value=100000)
     weight_tons = serializers.DecimalField(max_digits=12, decimal_places=3, min_value=Decimal("0.001"))
     xp_earned = serializers.IntegerField(min_value=0, max_value=100000)
+    fine_count = serializers.IntegerField(min_value=0, max_value=1000, required=False, default=0)
+    damage_percent = serializers.IntegerField(min_value=0, max_value=100, required=False, default=0)
     completed_at = serializers.DateTimeField()
 
 
-@endpoint(["POST"], app="player")
+@endpoint(["POST"])
 def delivery(request):
     form = DeliveryInput(data=request.data)
     form.is_valid(raise_exception=True)
     data = form.validated_data
+    company_id = data.get("company_id")
+    reserved = (CompanyFreight.objects.filter(pk=data["local_delivery_id"],
+        driver=request.user, company_id=company_id, game=data["game"],
+        status__in=["active", "settled"]).exists() if company_id else False)
+    if not player_access(request.user) and not reserved:
+        return Response({"detail": "Assinatura ativa necessária."}, status=403)
+    if company_id and not reserved:
+        raise serializers.ValidationError("Frete empresarial não foi iniciado no site.")
     digest = hashlib.sha256(json.dumps(form.data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     with transaction.atomic():
         type(request.user).objects.select_for_update().get(pk=request.user.pk)

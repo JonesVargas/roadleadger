@@ -8,12 +8,99 @@ class VirtualCompany(models.Model):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     legacy = models.BooleanField(default=False)
     name = models.CharField(max_length=150)
+    fictitious_cnpj = models.CharField(max_length=18, unique=True, null=True, blank=True)
+    driver_share_percent = models.PositiveSmallIntegerField(null=True, blank=True)
+    work_speed_limit_kmh = models.PositiveSmallIntegerField(null=True, blank=True)
+    fuel_allowance_per_4km_cents = models.PositiveIntegerField(null=True, blank=True)
     game = models.CharField(max_length=4)
-    capacity = models.PositiveIntegerField(default=0)
+    capacity = models.PositiveIntegerField(default=10)
+    capacity_purchases = models.PositiveIntegerField(default=0)
     rules = models.JSONField(default=dict)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['owner'], condition=models.Q(legacy=False), name='one_current_company_per_owner')]
+
+
+class CompanyFreight(models.Model):
+    id = models.UUIDField(primary_key=True)
+    company = models.ForeignKey(VirtualCompany, on_delete=models.PROTECT,
+                                related_name="freight_settlements")
+    driver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    game = models.CharField(max_length=4)
+    share_percent = models.PositiveSmallIntegerField()
+    speed_limit_kmh = models.PositiveSmallIntegerField()
+    fuel_allowance_per_4km_cents = models.PositiveIntegerField(null=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=12, default="active")
+    gross_cents = models.BigIntegerField(null=True)
+    commission_cents = models.BigIntegerField(null=True)
+    fuel_cents = models.BigIntegerField(null=True)
+    company_cents = models.BigIntegerField(null=True)
+    planned_km = models.PositiveIntegerField(null=True)
+    local_credit_id = models.CharField(max_length=200, blank=True)
+    transaction = models.ForeignKey("road_sync.VirtualTransaction", null=True,
+                                    on_delete=models.PROTECT)
+    settled_at = models.DateTimeField(null=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["local_credit_id"],
+            condition=~models.Q(local_credit_id=""),
+            name="unique_company_freight_credit")]
+
+
+class CompanyCapacityPurchase(models.Model):
+    id = models.UUIDField(primary_key=True)
+    company = models.ForeignKey(VirtualCompany, on_delete=models.PROTECT)
+    purchased_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    level_after = models.PositiveIntegerField()
+    capacity_after = models.PositiveIntegerField()
+    transaction = models.OneToOneField("road_sync.VirtualTransaction",
+                                       on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class CompanyFineEvent(models.Model):
+    company = models.ForeignKey(VirtualCompany, on_delete=models.PROTECT)
+    driver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    event_key = models.CharField(max_length=200)
+    game = models.CharField(max_length=4)
+    occurred_at = models.DateTimeField()
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["driver", "event_key"],
+            name="unique_company_driver_fine")]
+
+
+class PlayerCompanyMission(models.Model):
+    company = models.ForeignKey(VirtualCompany, on_delete=models.PROTECT,
+                                related_name="player_missions")
+    title = models.CharField(max_length=160)
+    description = models.TextField()
+    objective = models.CharField(max_length=24, choices=[
+        ("deliveries", "Entregas concluídas"),
+        ("planned_km", "Quilômetros planejados"),
+        ("cargo_deliveries", "Entregas de uma carga"),
+        ("destination_deliveries", "Entregas para um destino"),
+    ])
+    target = models.PositiveIntegerField()
+    match_text = models.CharField(max_length=150, blank=True)
+    status = models.CharField(max_length=12, default="active")
+    created_at = models.DateTimeField(auto_now_add=True)
+    closed_at = models.DateTimeField(null=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL,
+                                   on_delete=models.PROTECT)
+
+
+class PlayerCompanyMissionAssignment(models.Model):
+    mission = models.ForeignKey(PlayerCompanyMission, on_delete=models.PROTECT,
+                                related_name="assignments")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    assigned_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["mission", "user"],
+            name="one_company_mission_assignee")]
 
 
 class CompanyMembership(models.Model):
@@ -46,7 +133,8 @@ class Candidacy(models.Model):
     own_truck = models.BooleanField(default=False)
     status = models.CharField(max_length=30, default="pending")
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["vacancy", "player"], name="unique_player_application")]
+        indexes = [models.Index(fields=["vacancy", "player", "status"],
+                                name="cand_vac_player_state")]
 
 
 class EmployeeContract(models.Model):

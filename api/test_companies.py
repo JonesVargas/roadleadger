@@ -2,6 +2,8 @@ import uuid
 from django.test import TestCase
 from django.utils import timezone
 from accounts.models import User, CompanyOwnershipLicense
+from subscriptions.models import Plan, Subscription
+from datetime import timedelta
 from licenses.models import ApiToken
 from .models import VirtualCompany, Vacancy, Candidacy, EmployeeContract, OnlineFreight, FreightEvent
 from .company_api import DEFAULT_RULES
@@ -12,11 +14,16 @@ class CompanyIntegrationTests(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user("owner@example.com", "test-pass", lifetime_access=True)
         self.player = User.objects.create_user("player@example.com", "test-pass", full_name="Ana")
+        plan = Plan.objects.create(code="test-player", name="Player", price="9.90",
+                                   interval="month", product="player")
+        Subscription.objects.create(user=self.player, plan=plan, status="active",
+            current_period_end=timezone.now()+timedelta(days=30))
         self.other = User.objects.create_user("other@example.com", "test-pass", lifetime_access=True)
         CompanyOwnershipLicense.objects.create(user=self.owner, source="administrative")
         CompanyOwnershipLicense.objects.create(user=self.other, source="administrative")
         self.tokens = {u.pk: ApiToken.issue(u)[1] for u in (self.owner, self.player, self.other)}
-        self.company = VirtualCompany.objects.create(owner=self.owner, name="Empresa A", game="ETS2", capacity=10, rules=DEFAULT_RULES.copy())
+        self.company = VirtualCompany.objects.create(owner=self.owner, name="Empresa A", game="ETS2", capacity=10, rules=DEFAULT_RULES.copy(),
+            driver_share_percent=70, work_speed_limit_kmh=90)
         self.vacancy = Vacancy.objects.create(company=self.company, title="Motorista", description="Teste", quantity=1)
 
     def call(self, user, path, data=None):
@@ -37,6 +44,26 @@ class CompanyIntegrationTests(TestCase):
         self.assertEqual(self.call(self.other, "my/contracts/").json(), [])
         self.assertIsNotNone(contract.signed_at)
         self.assertEqual(self.client.get("/api/v1/my/contracts/").status_code, 403)
+
+    def test_player_can_return_after_resignation_without_losing_history(self):
+        first = self.hired()
+        resigned = self.call(self.player, f"contracts/{first.id}/resign/",
+                             {"confirmed": True})
+        self.assertEqual(resigned.status_code, 200, resigned.content)
+        application = self.call(self.player,
+            f"vacancies/{self.vacancy.pk}/applications/", {"own_truck": True})
+        self.assertEqual(application.status_code, 201, application.content)
+        self.assertNotEqual(str(application.json()["id"]), str(first.candidacy_id))
+        offer = self.call(self.owner,
+            f"applications/{application.json()['id']}/offer/", {})
+        self.assertEqual(offer.status_code, 201, offer.content)
+        accepted = self.call(self.player,
+            f"contracts/{offer.json()['id']}/accept/", {"accepted": True})
+        self.assertEqual(accepted.status_code, 200, accepted.content)
+        first.refresh_from_db()
+        self.assertIsNotNone(first.ended_at)
+        self.assertEqual(EmployeeContract.objects.filter(
+            candidacy__player=self.player).count(), 2)
 
     def test_telemetry_penalties_and_retry(self):
         contract = self.hired()

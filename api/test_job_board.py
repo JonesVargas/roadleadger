@@ -1,6 +1,8 @@
 from django.test import TestCase
 from django.utils import timezone
 from accounts.models import User, CompanyOwnershipLicense
+from subscriptions.models import Plan, Subscription
+from datetime import timedelta
 from .models import VirtualCompany, Vacancy, Candidacy, EmployeeContract
 from .job_board import hiring_companies
 
@@ -34,11 +36,17 @@ class JobBoardTests(TestCase):
     def test_player_search_by_company_and_game(self):
         from rest_framework.test import APIClient
         owner = User.objects.create_user("search-owner@board.test", "test", lifetime_access=True)
+        CompanyOwnershipLicense.objects.create(user=owner, source="administrative")
         player = User.objects.create_user("search-player@board.test", "test")
+        plan = Plan.objects.create(code="search-player", name="Player", price="9.90",
+                                   interval="month", product="player")
+        Subscription.objects.create(user=player, plan=plan, status="active",
+            current_period_end=timezone.now()+timedelta(days=30))
         company = VirtualCompany.objects.create(owner=owner, name="Transportes Aurora", game="ETS2", capacity=2)
         vacancy = Vacancy.objects.create(company=company, title="Motorista", quantity=5)
         Vacancy.objects.create(company=company, title="Fechada", open=False)
         other_owner = User.objects.create_user("other-owner@board.test", "test", lifetime_access=True)
+        CompanyOwnershipLicense.objects.create(user=other_owner, source="administrative")
         other = VirtualCompany.objects.create(owner=other_owner, name="Outra", game="ATS", capacity=2)
         Vacancy.objects.create(company=other, title="Motorista")
         client = APIClient()
@@ -49,7 +57,7 @@ class JobBoardTests(TestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(str(response.data[0]["id"]), str(vacancy.id))
         self.assertEqual(response.data[0]["available"], 2)
-        self.assertEqual(len(client.get("/api/v1/vacancies/", {"q": "Aurora", "game": "ATS"}).data), 1)
+        self.assertEqual(len(client.get("/api/v1/vacancies/", {"q": "Aurora", "game": "ATS"}).data), 0)
         self.assertEqual(client.get("/api/v1/vacancies/", {"offset": 2}).data, [])
         self.assertEqual(client.get("/api/v1/vacancies/", {"offset": -1}).status_code, 400)
         company.capacity = 0
@@ -60,8 +68,13 @@ class JobBoardTests(TestCase):
         from rest_framework.test import APIClient
         owner = User.objects.create_user("offer-owner@board.test", "test", lifetime_access=True)
         player = User.objects.create_user("offer-player@board.test", "test")
+        plan = Plan.objects.create(code="offer-player", name="Player", price="9.90",
+                                   interval="month", product="player")
+        Subscription.objects.create(user=player, plan=plan, status="active",
+            current_period_end=timezone.now()+timedelta(days=30))
         CompanyOwnershipLicense.objects.create(user=owner, source="administrative")
-        company = VirtualCompany.objects.create(owner=owner, name="Aurora", game="ETS2", capacity=2)
+        company = VirtualCompany.objects.create(owner=owner, name="Aurora", game="ETS2",
+            capacity=2, driver_share_percent=70, work_speed_limit_kmh=90)
         vacancy = Vacancy.objects.create(company=company, title="Motorista")
         client = APIClient()
         client.force_authenticate(player)

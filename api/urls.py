@@ -1,4 +1,4 @@
-from . import company_api, recruitment, autonomous, company_sync, missions, company_backup, company_portal
+from . import company_api, recruitment, autonomous, company_sync, missions, company_backup, company_portal, company_freight, player_missions, company_progress
 from django.urls import path
 
 from . import views
@@ -17,7 +17,21 @@ urlpatterns = [
     path("v1/companies/<uuid:company_id>/players/", recruitment.players),
     path("v1/companies/<uuid:company_id>/job-offers/", recruitment.send),
     path("v1/my/company-access/", company_portal.access_state),
+    path("v1/my/company-work-assignment/", company_portal.work_assignment),
+    path("v1/my/company-freights/", company_freight.reserve),
+    path("v1/my/company-fines/", company_progress.record_company_fine),
+    path("v1/my/company-missions/", player_missions.my_missions),
+    path("v1/companies/<uuid:company_id>/missions/", player_missions.company_missions),
+    path("v1/companies/<uuid:company_id>/missions/<int:mission_id>/close/",
+         player_missions.close_mission),
+    path("v1/my/company-freights/<uuid:delivery_id>/cancel/", company_freight.cancel),
+    path("v1/my/company-freights/<uuid:delivery_id>/settle/", company_freight.settle),
     path("v1/companies/<uuid:company_id>/summary/", company_portal.summary),
+    path("v1/companies/<uuid:company_id>/capacity/purchase/", company_progress.buy_capacity),
+    path("v1/companies/<uuid:company_id>/work-terms/", company_portal.work_terms),
+    path("v1/companies/<uuid:company_id>/hiring-capacity/", company_portal.hiring_capacity),
+    path("v1/companies/<uuid:company_id>/settlements/", company_portal.freight_settlements),
+    path("v1/companies/<uuid:company_id>/deliveries/", company_portal.company_deliveries),
     path("v1/companies/<uuid:company_id>/members/", company_portal.members),
     path("v1/companies/<uuid:company_id>/members/<int:user_id>/revoke/", company_portal.revoke_member),
     path("v1/companies/", company_api.companies),

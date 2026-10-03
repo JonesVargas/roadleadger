@@ -1,7 +1,9 @@
 from django.db import transaction
+from uuid import uuid4, uuid5, NAMESPACE_URL
 from rest_framework import serializers
 from rest_framework.response import Response
 from .company_api import endpoint, DEFAULT_RULES, integer
+from .company_identity import fictitious_cnpj
 from .models import CompanyDesktopLink, VacancyDesktopLink, VirtualCompany, Vacancy, EmployeeContract
 
 class VacancyInput(serializers.Serializer):
@@ -37,12 +39,18 @@ def synchronize(request):
         else:
             if VirtualCompany.objects.filter(owner=request.user, legacy=False).exists():
                 raise serializers.ValidationError("Esta conta já possui uma empresa.")
-            company = VirtualCompany.objects.create(owner=request.user, name=data["name"], game=data["game"])
+            company_id = uuid4()
+            company = VirtualCompany.objects.create(id=company_id, owner=request.user,
+                name=data["name"], game=data["game"],
+                fictitious_cnpj=fictitious_cnpj(company_id))
+            from road_sync.models import VirtualAccount
+            VirtualAccount.objects.create(id=uuid5(NAMESPACE_URL,
+                f"roadledger:wallet:{request.user.pk}:company:{company.id}"),
+                owner=request.user, company=company, game=company.game,
+                label="Empresa", reconciled=True)
             CompanyDesktopLink.objects.create(owner=request.user, local_id=data["local_id"], company=company)
         active = EmployeeContract.objects.filter(candidacy__vacancy__company=company, signed_at__isnull=False, ended_at__isnull=True).count()
-        if data["capacity"] < active:
-            raise serializers.ValidationError("A capacidade não pode ser menor que os vínculos ativos no site.")
-        company.name, company.capacity, company.rules = data["name"], data["capacity"], rules
+        company.name, company.rules = data["name"], rules
         company.save()
         for row in data["vacancies"]:
             mapping = VacancyDesktopLink.objects.filter(company=company, local_id=row["local_id"]).first()
