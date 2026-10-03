@@ -1,7 +1,7 @@
 """Server-side access decision for Connect company ownership and assigned roles."""
 from accounts.models import CompanyOwnershipLicense
 from subscriptions.access import allowed_apps
-from .models import CompanyMembership
+from .models import CompanyMembership, EmployeeContract
 
 ROLE_PERMISSIONS = {
     "driver": frozenset({"view_missions"}),
@@ -25,6 +25,11 @@ def has_company_permission(user, company, permission):
         return False
     if company.owner_id == user.pk:
         return can_own_company(user)
+    if not can_own_company(company.owner):
+        return False
     membership = CompanyMembership.objects.filter(company=company, user=user, active=True).first()
     return bool(membership and permission in ROLE_PERMISSIONS.get(membership.role, ())
-                and permission in membership.permissions)
+                and permission in membership.permissions
+                and EmployeeContract.objects.filter(
+                    candidacy__player=user, candidacy__vacancy__company=company,
+                    signed_at__isnull=False, ended_at__isnull=True).exists())

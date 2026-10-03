@@ -21,13 +21,20 @@ def access_state(request):
     license = ownership_license(request.user)
     subscribed = player_access(request.user)
     owned = VirtualCompany.objects.filter(owner=request.user, legacy=False).first()
-    memberships = CompanyMembership.objects.filter(user=request.user, active=True, company__legacy=False).select_related("company")
+    from .models import EmployeeContract
+    active_companies = EmployeeContract.objects.filter(
+        candidacy__player=request.user, signed_at__isnull=False,
+        ended_at__isnull=True).values("candidacy__vacancy__company_id")
+    memberships = CompanyMembership.objects.filter(
+        user=request.user, active=True, company__legacy=False,
+        company_id__in=active_companies).select_related("company")
     return Response(dict(subscription_active=subscribed, license_status=license.status if license else "absent",
         license_source=license.source if license else None, can_own=can_own_company(request.user),
         owned_company=dict(id=owned.id, name=owned.name, game=owned.game,
             fictitious_cnpj=owned.fictitious_cnpj) if owned else None,
         memberships=[dict(company_id=row.company_id, company_name=row.company.name, role=row.role,
-                          permissions=row.permissions) for row in memberships] if subscribed else [],
+                          permissions=row.permissions) for row in memberships
+                     if can_own_company(row.company.owner)] if subscribed else [],
         purchase_available=False, proposed_price_brl="40.00"))
 
 

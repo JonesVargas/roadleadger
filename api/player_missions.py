@@ -108,7 +108,7 @@ def my_missions(request):
         if company.owner_id == request.user.pk:
             allowed = can_own_company(request.user)
         else:
-            allowed = EmployeeContract.objects.filter(
+            allowed = can_own_company(company.owner) and EmployeeContract.objects.filter(
                 candidacy__player=request.user,
                 candidacy__vacancy__company=company,
                 signed_at__isnull=False, ended_at__isnull=True).exists()
