@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     "dashboard",
     "api",
     "road_sync",
+    "road_radio",
     "connector_finance",
 ]
 MIDDLEWARE = [

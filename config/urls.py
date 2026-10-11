@@ -6,6 +6,7 @@ urlpatterns = [
     path("painel/sincronizacao/", sync_web.center, name="sync-center"),
     path("painel/sincronizacao/eventos/", sync_web.stream, name="sync-stream"),
     path("api/v1/sync/", include("road_sync.urls")),
+    path("api/v1/radio/", include("road_radio.urls")),
     path("api/v1/connector-finance/", include("connector_finance.urls")),
     path("admin/", admin.site.urls),
     path("", include("core.urls")),
