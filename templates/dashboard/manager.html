@@ -9,6 +9,7 @@
     <a class="{% if section == 'versoes' %}active{% endif %}" href="?section=versoes">Aplicativo</a>
     <a class="{% if section == 'planos' %}active{% endif %}" href="?section=planos">Planos e preços</a>
     <a class="{% if section == 'pagamentos' %}active{% endif %}" href="?section=pagamentos">Pagamentos</a>
+    <a href="{% url 'tabletbridge-manager' %}">TabletBridge / Cooperativa RoadLedger</a>
     <a class="{% if section == 'clientes' %}active{% endif %}" href="?section=clientes">Clientes e acessos</a>
     <a class="{% if section == 'suporte' %}active{% endif %}" href="?section=suporte">Suporte{% if open_support_tickets %} ({{ open_support_tickets }}){% endif %}</a>
     <a class="{% if section == 'conteudo' %}active{% endif %}" href="?section=conteudo">Conteúdo do site</a>

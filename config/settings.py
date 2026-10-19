@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     "road_sync",
     "road_radio",
     "connector_finance",
+    "tabletbridge_access",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

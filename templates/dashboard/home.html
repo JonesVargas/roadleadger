@@ -3,6 +3,7 @@
 {% block content %}
 <section class="page-head dashboard-head"><div><span class="eyebrow">Área do cliente</span><h1>Olá, {{ user.full_name }}.</h1></div><a class="button ghost" href="{% url 'accounts:profile' %}">Editar perfil</a></section>
 <a class="button ghost small" href="{% url 'sync-center' %}">Atualizações dos aplicativos</a>
+{% if tabletbridge_allowed %}<a class="button ghost small" href="{% url 'tabletbridge-demands' %}">Cooperativa RoadLedger</a>{% endif %}
 {% if section == 'conta' %}
 <section class="section dashboard-grid">
   <article class="panel span2"><h2>Seu acesso</h2>

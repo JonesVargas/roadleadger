@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Cooperativa RoadLedger · TabletBridge{% endblock %}
+{% block content %}
+<section class="page-head"><span class="eyebrow">TabletBridge</span><h1>Cooperativa RoadLedger</h1><p>Ofertas de compra do site para todos os players autorizados. Você escolhe entre vender no jogo ou atender às demandas do site quando a integração estiver disponível.</p><a class="button ghost" href="{% url 'dashboard:home' %}">Minha conta</a></section>
+<section class="section"><p class="notice">Contratos por tempo indeterminado. Valores em moedas do jogo. Entregas e pagamentos ainda não estão integrados; esta página apenas apresenta as demandas.</p>
+{% for demand in demands %}<article class="panel"><h2>Cooperativa RoadLedger · Demanda #{{ demand.pk }}</h2><p>Aberta a todos os players autorizados · sem vencimento</p>
+{% for item in demand.items.all %}<div class="admin-list"><div><strong>{{ item.product_name }}</strong><small>Quantidade solicitada: {{ item.quantity|floatformat:3 }} {{ item.unit }}</small></div><div><strong>{{ item.unit_price|floatformat:2 }} / {{ item.unit }}</strong><small>Total previsto: {{ item.total|floatformat:2 }}</small></div></div>{% endfor %}
+<p>Total previsto da demanda: <strong>{{ demand.total|floatformat:2 }}</strong> moedas do jogo.</p></article>{% empty %}<article class="panel"><p>Nenhuma demanda publicada no momento.</p></article>{% endfor %}
+<nav class="form-actions">{% if demands.has_previous %}<a class="button ghost" href="?page={{ demands.previous_page_number }}">Anterior</a>{% endif %}<span>{{ demands.number }} / {{ demands.paginator.num_pages }}</span>{% if demands.has_next %}<a class="button ghost" href="?page={{ demands.next_page_number }}">Próxima</a>{% endif %}</nav></section>
+{% endblock %}

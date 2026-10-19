@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.models import User, CompanyOwnershipLicense
+from tabletbridge_access.service import decision as tabletbridge_decision
 from audit.models import AuditEvent
 from core.models import FAQ, Feature, LegalPage, ServiceStatus, SocialLink, UpdatePost
 from downloads.models import AppVersion, DownloadEvent
@@ -48,6 +49,7 @@ def home(request):
             if version_allowed(request.user, version)
         ][:10]
     return render(request, "dashboard/home.html", {
+        "tabletbridge_allowed": tabletbridge_decision(request.user)[0] == "authorized",
         "company_backup": CompanyCloudBackup.objects.filter(owner=request.user, company__legacy=False).select_related("company").defer("content").first(),
         "owned_companies": VirtualCompany.objects.filter(owner=request.user, legacy=False),
         "company_license": CompanyOwnershipLicense.objects.filter(user=request.user).first(),

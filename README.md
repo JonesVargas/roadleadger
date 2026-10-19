@@ -48,3 +48,10 @@ Use `.env.production.example` como checklist. Gere valores longos e independente
 ## Conteúdo jurídico
 
 Os textos de Termos e Privacidade gerados pelo seed são modelos provisórios e precisam de revisão jurídica antes da publicação.
+
+
+## Integração TabletBridge 0.8.0 (local, não implantada)
+
+Nova API independente em `/api/v1/tabletbridge/`: login por e-mail, perfil, renovação e saída. Direito administrativo específico em `tabletbridge_access.AccessGrant`; assinaturas/vitalício ETS2/ATS não concedem TabletBridge automaticamente. Sessões opacas independentes por dispositivo, acesso 10 minutos, renovação 30 dias e revogação no banco.
+
+Ver [documentação completa](docs/TABLETBRIDGE_AUTH.md) para regras, administração, testes, armazenamento Windows/Android, limitações e procedimento de implantação/migração para revisão. Nenhum deploy ou migração no banco atual foi executado nesta entrega.
