@@ -6,6 +6,7 @@ from . import trade_views
 urlpatterns = [path('login/', views.login), path('me/', views.me),
                path('refresh/', views.refresh), path('logout/', views.logout), path('demands/', views.demands),
                path('market/',market_views.market),path('market/profile/',market_views.save_profile),
+               path('market/cooperative-demands/',views.demands),
                path('market/drafts/',market_views.save_draft),
                path('market/connectors/',trade_views.connectors),path('market/connectors/approve/',trade_views.approve),
                path('market/connectors/<uuid:node_id>/revoke/',trade_views.revoke),
