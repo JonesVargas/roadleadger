@@ -40,9 +40,12 @@ def draft_data(draft):
 
 
 def capabilities():
+    from .models import RuralTaxPolicy
+    policy=RuralTaxPolicy.objects.filter(enabled=True).order_by('pk').first()
+    rate=policy.previdencia+policy.rat+policy.senar if policy else (Decimal('0') if RuralTaxPolicy.objects.exists() else Decimal('2.23'))
     return {'commerce_enabled':False,'cooperative_fulfillment_enabled':True,'offers_enabled':True,'purchase_requests_enabled':True,'drafts_enabled':True,'reservations_enabled':True,'settlement_enabled':False,
-        'fees':{'sales_tax_percent':'1.50','monthly_property_fee':'25.00','currency':'game'},
-        'offers':[], 'message':'Rascunhos e reservas privadas. Compra, entrega e cobrança ainda indisponíveis.'}
+        'fees':{'sales_tax_percent':str(rate),'monthly_property_fee':'25.00','currency':'game'},
+        'bulk_settlement_enabled':True,'offers':[], 'message':'Comércio a granel disponível com mods atualizados. Salve após receber carga ou pagamento.'}
 
 
 @endpoint('GET')
@@ -50,7 +53,7 @@ def market(request):
     session,failure=authenticated(request)
     if failure is not None:return failure
     farm=FarmProfile.objects.filter(user=session.user).first()
-    page=Paginator(MarketDraft.objects.filter(farm=farm).select_related('reservation__offer','demand_item'),20).get_page(request.GET.get('page'))
+    page=Paginator(MarketDraft.objects.filter(farm=farm,reservation__incoming_purchase__isnull=True).select_related('reservation__offer','demand_item'),20).get_page(request.GET.get('page'))
     return Response(dict(capabilities(),profile=profile_data(farm) if farm else None,
         drafts=[draft_data(d) for d in page],page=page.number,pages=page.paginator.num_pages))
 

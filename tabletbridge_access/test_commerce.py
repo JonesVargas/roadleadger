@@ -57,7 +57,7 @@ class CommerceTests(TestCase):
         reservation=MarketOffer.objects.get().reservation
         self.assertEqual(self.post('market/reservations/'+str(reservation.pk)+'/release').json()['code'],'offer_busy')
         self.assertEqual(MarketCommand.objects.count(),before)
-        self.assertFalse(order['settlement_enabled'])
+        self.assertTrue(order['settlement_enabled'])
         self.assertEqual(self.get('market/offers',buyer).json()['offers'],[])
 
     def test_party_actions_and_cancel_accepted_request_unlock_offer_without_refund(self):

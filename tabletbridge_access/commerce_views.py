@@ -10,7 +10,7 @@ from .views import endpoint,authenticated,error
 from .service import decision
 
 RELATED='reservation__draft__farm__user'
-ACTIVE=('requested','accepted')
+ACTIVE=('requested','accepted','receiving','received','paying','needs_review')
 
 def offer_data(offer,user):
     draft=offer.reservation.draft
@@ -20,10 +20,13 @@ def offer_data(offer,user):
 
 def purchase_data(order,user):
     draft=order.offer.reservation.draft
+    from .invoices import quote,quote_id
+    financial=order.financial_snapshot or quote(draft,order.buyer)
     return dict(id=str(order.pk),offer_id=str(order.offer_id),product=draft.product,
         seller=draft.farm.name,buyer=order.buyer.name,role='seller' if draft.farm.user_id==user.pk else 'buyer',
         status=order.status,quantity_liters=str(order.quantity_liters),price_per_thousand=str(order.price_per_thousand),
-        total=str(order.total),destination=order.destination.terminal_id,settlement_enabled=False)
+        total=str(order.total),destination=order.destination.terminal_id,settlement_enabled=True,
+        quote=financial,quote_id=quote_id(financial))
 
 def withdraw_offer(reservation):
     """Caller holds the reservation binding lock, shared with purchase creation."""
@@ -114,10 +117,17 @@ def decide(request,purchase_id):
         order=PurchaseRequest.objects.select_for_update().select_related('offer__reservation__draft__farm','buyer','destination').get(pk=purchase_id)
         seller=order.offer.reservation.draft.farm.user_id==session.user.pk
         if (action=='cancel' and seller) or (action!='cancel' and not seller):return error('not_found',404)
+        if order.status in ('receiving','received','paying','needs_review','completed'):return error('fulfillment_locked',409)
         target={'accept':'accepted','decline':'declined','cancel':'cancelled'}[action]
         if order.status==target:return Response({'purchase':purchase_data(order,session.user)})
         if order.status not in ACTIVE or (action=='accept' and order.status!='requested'):return error('purchase_closed',409)
-        order.status=target;order.save(update_fields=['status'])
+        if action=='accept':
+            from .invoices import quote,quote_id
+            financial=quote(order.offer.reservation.draft,order.buyer)
+            # Existing clients can agree to a proposal, but cannot initiate a
+            # debit; the buyer must acknowledge the saved quote separately.
+            order.financial_snapshot=financial
+        order.status=target;order.save(update_fields=['status','financial_snapshot'])
         if target in ('declined','cancelled'):
             order.offer.status='published';order.offer.save(update_fields=['status'])
     return Response({'purchase':purchase_data(order,session.user)})

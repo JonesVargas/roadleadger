@@ -3,6 +3,19 @@ from django.utils import timezone
 from audit.models import AuditEvent
 from .models import AccessGrant, DeviceSession, ProductDemand, DemandItem, FarmProfile, MarketDraft, TradeBinding, ConnectorNode, MarketReservation, MarketCommand
 from .forms import ItemFormSet
+from .models import RuralTaxPolicy,TradeInvoice
+
+@admin.register(RuralTaxPolicy)
+class RuralTaxPolicyAdmin(admin.ModelAdmin):
+    list_display=('name','previdencia','rat','senar','enabled','updated_at')
+    def has_add_permission(self,request):return not RuralTaxPolicy.objects.exists() and super().has_add_permission(request)
+
+@admin.register(TradeInvoice)
+class TradeInvoiceAdmin(admin.ModelAdmin):
+    list_display=('id','seller','buyer','issued_at')
+    readonly_fields=('reservation','seller','buyer','snapshot','issued_at')
+    def has_add_permission(self,request):return False
+    def has_delete_permission(self,request,obj=None):return False
 
 
 @admin.register(AccessGrant)

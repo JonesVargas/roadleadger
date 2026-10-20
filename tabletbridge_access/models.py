@@ -179,12 +179,13 @@ class MarketReservation(models.Model):
 
 
 class MarketCommand(models.Model):
+    financial_snapshot = models.JSONField(default=dict)
     amount_cents = models.PositiveBigIntegerField(default=0)
     game_session = models.CharField(max_length=128,blank=True)
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     reservation = models.ForeignKey(MarketReservation,on_delete=models.PROTECT,related_name='commands')
     node = models.ForeignKey(ConnectorNode,on_delete=models.PROTECT)
-    kind = models.CharField(max_length=10,choices=[('reserve','Reservar'),('release','Devolver'),('fulfill','Entregar à cooperativa')])
+    kind = models.CharField(max_length=10,choices=[('reserve','Reservar'),('release','Devolver'),('fulfill','Entregar e receber'),('purchase','Comprar e receber')])
     expected_revision = models.PositiveIntegerField()
     status = models.CharField(max_length=12,default='pending',choices=[('pending','Pendente'),('applied','Salvo no jogo'),('rejected','Recusado'),('uncertain','Requer conferência')])
     receipt = models.JSONField(default=dict)
@@ -199,19 +200,21 @@ class MarketCommand(models.Model):
 class MarketOffer(models.Model):
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     reservation = models.OneToOneField(MarketReservation,on_delete=models.PROTECT,related_name='offer')
-    status = models.CharField(max_length=20,default='published',choices=[('published','Publicado'),('negotiating','Em negociação'),('cancelled','Cancelado')])
+    status = models.CharField(max_length=20,default='published',choices=[('published','Publicado'),('negotiating','Em negociação'),('cancelled','Cancelado'),('sold','Vendido')])
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering=['-created_at','-pk']
 
 
 class PurchaseRequest(models.Model):
+    delivery=models.OneToOneField(MarketReservation,on_delete=models.PROTECT,null=True,blank=True,related_name='incoming_purchase')
+    financial_snapshot=models.JSONField(default=dict)
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     offer = models.ForeignKey(MarketOffer,on_delete=models.PROTECT,related_name='purchase_requests')
     buyer = models.ForeignKey(FarmProfile,on_delete=models.PROTECT,related_name='purchase_requests')
     destination = models.ForeignKey(TradeBinding,on_delete=models.PROTECT)
     request_key = models.UUIDField()
-    status = models.CharField(max_length=20,default='requested',choices=[('requested','Aguardando vendedor'),('accepted','Acordado; pagamento pendente'),('declined','Recusado'),('cancelled','Cancelado')])
+    status = models.CharField(max_length=20,default='requested',choices=[('requested','Aguardando vendedor'),('accepted','Aguardando compra'),('receiving','Compra em confirmação'),('received','Carga entregue; aguardando vendedor'),('paying','Pagamento do vendedor em confirmação'),('completed','Concluído'),('needs_review','Requer conferência'),('declined','Recusado'),('cancelled','Cancelado')])
     quantity_liters = models.DecimalField(max_digits=15,decimal_places=3)
     price_per_thousand = models.DecimalField(max_digits=12,decimal_places=2)
     total = models.DecimalField(max_digits=15,decimal_places=2)
@@ -220,5 +223,33 @@ class PurchaseRequest(models.Model):
         ordering=['-created_at','-pk']
         constraints=[
             models.UniqueConstraint(fields=['buyer','request_key'],name='tb_purchase_retry'),
-            models.UniqueConstraint(fields=['offer'],condition=models.Q(status__in=['requested','accepted']),name='tb_one_active_purchase'),
+            models.UniqueConstraint(fields=['offer'],condition=models.Q(status__in=['requested','accepted','receiving','received','paying','needs_review']),name='tb_one_active_purchase'),
             models.CheckConstraint(condition=models.Q(quantity_liters__gt=0,total__gt=0),name='tb_purchase_positive')]
+
+
+class RuralTaxPolicy(models.Model):
+    """Game economy configuration. Never represents real tax assessment."""
+    name=models.CharField(max_length=80,default='Produtor rural PJ · receita da produção própria')
+    previdencia=models.DecimalField(max_digits=5,decimal_places=2,default=Decimal('1.87'))
+    rat=models.DecimalField(max_digits=5,decimal_places=2,default=Decimal('0.11'))
+    senar=models.DecimalField(max_digits=5,decimal_places=2,default=Decimal('0.25'))
+    enabled=models.BooleanField(default=True)
+    updated_at=models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        rates=[self.previdencia,self.rat,self.senar]
+        if any(value is None or not 0<=value<=100 for value in rates) or sum(rates)>=100:
+            raise ValidationError('Percentuais devem ser positivos e somar menos de 100%.')
+
+
+class TradeInvoice(models.Model):
+    id=models.BigAutoField(primary_key=True)
+    reservation=models.OneToOneField(MarketReservation,on_delete=models.PROTECT,related_name='invoice')
+    seller=models.ForeignKey(FarmProfile,on_delete=models.PROTECT,related_name='sales_invoices')
+    buyer=models.ForeignKey(FarmProfile,on_delete=models.PROTECT,null=True,blank=True,related_name='purchase_invoices')
+    snapshot=models.JSONField()
+    issued_at=models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering=['-id']

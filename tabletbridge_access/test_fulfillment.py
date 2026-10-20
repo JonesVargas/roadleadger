@@ -9,7 +9,12 @@ from .models import ProductDemand,DemandItem,MarketCommand,MarketReservation,Mar
 @override_settings(SECURE_SSL_REDIRECT=False,PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
 class FulfillmentTests(TestCase):
     setUp=TradeTests.setUp
-    post=TradeTests.post
+    def post(self,route,data=None,token='seller'):
+        if route.endswith('/fulfill') and data is None:
+            from .invoices import quote,quote_id
+            reservation=MarketReservation.objects.select_related('draft__farm').get(pk=route.split('/')[-2])
+            data={'financial_ack':quote_id(quote(reservation.draft))}
+        return TradeTests.post(self,route,data,token)
     applied=TradeTests.applied
     observe=TradeTests.observe
 
@@ -56,7 +61,7 @@ class FulfillmentTests(TestCase):
         self.assertEqual(self.post(route,token=first['token']).status_code,200)
         self.assertEqual(self.post(route,token=first['token']).status_code,200)
         command=self.observe_node(first['pair'],first['terminal'],1).json()['command']
-        self.assertEqual(command['amountCents'],630000)
+        self.assertEqual(command['amountCents'],615951)
         proof=self.payout_proof(command,82000);bad=dict(proof);bad.pop('farms_sha256')
         receipt='node/commands/'+command['id']+'/receipt'
         self.assertEqual(self.post(receipt,bad,first['pair']['node_token']).status_code,409)
@@ -95,4 +100,4 @@ class FulfillmentTests(TestCase):
         self.observe_node(lot['pair'],lot['terminal'],1)
         item.unit_price=Decimal('999');item.save()
         self.assertEqual(self.post(route,token=lot['token']).status_code,200)
-        self.assertEqual(MarketCommand.objects.get(kind='fulfill').amount_cents,630000)
+        self.assertEqual(MarketCommand.objects.get(kind='fulfill').amount_cents,615951)
