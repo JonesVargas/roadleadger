@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
 from audit.models import AuditEvent
-from .models import AccessGrant, DeviceSession, ProductDemand, DemandItem
+from .models import AccessGrant, DeviceSession, ProductDemand, DemandItem, FarmProfile, MarketDraft, TradeBinding, ConnectorNode, MarketReservation, MarketCommand
 from .forms import ItemFormSet
 
 
@@ -62,6 +62,49 @@ class DemandItemInline(admin.TabularInline):
     def get_formset(self, request, obj=None, **kwargs):
         kwargs.update(validate_min=True,validate_max=True,absolute_max=40)
         return super().get_formset(request,obj,**kwargs)
+
+
+class MarketReadOnlyAdmin(admin.ModelAdmin):
+    actions=None
+    def has_add_permission(self,request):return False
+    def has_delete_permission(self,request,obj=None):return False
+    def has_change_permission(self,request,obj=None):return False
+
+
+@admin.register(FarmProfile)
+class FarmProfileAdmin(MarketReadOnlyAdmin):
+    list_display=('name','user','fictional_cnpj','updated_at')
+    search_fields=('name','user__email','fictional_cnpj')
+
+
+@admin.register(MarketDraft)
+class MarketDraftAdmin(MarketReadOnlyAdmin):
+    list_display=('id','farm','product','quantity_liters','price_per_thousand','created_at')
+    list_filter=('product',)
+    search_fields=('farm__name','farm__user__email','terminal_id')
+
+
+@admin.register(TradeBinding)
+class TradeBindingAdmin(MarketReadOnlyAdmin):
+    list_display=('terminal_id','farm','game_farm_id','anchor_revision','blocked')
+
+
+@admin.register(ConnectorNode)
+class ConnectorNodeAdmin(MarketReadOnlyAdmin):
+    list_display=('id','binding','approved_at','expires_at','revoked_at','last_seen_at')
+    exclude=('credential_hash','pair_code_hash','password_stamp')
+
+
+@admin.register(MarketReservation)
+class MarketReservationAdmin(MarketReadOnlyAdmin):
+    list_display=('id','draft','binding','status','created_at')
+    list_filter=('status',)
+
+
+@admin.register(MarketCommand)
+class MarketCommandAdmin(MarketReadOnlyAdmin):
+    list_display=('id','reservation','node','kind','status','created_at','completed_at')
+    list_filter=('status','kind')
 
 
 @admin.register(ProductDemand)

@@ -32,7 +32,7 @@ def error(code, status):
     return Response({'code': code}, status=status, headers={'Cache-Control': 'no-store'})
 
 
-def endpoint(method, login=False):
+def endpoint(method, login=False, throttle=None):
     def decorate(fn):
         @wraps(fn)
         def guarded(request, *args, **kwargs):
@@ -43,7 +43,7 @@ def endpoint(method, login=False):
             return result
         return sensitive_post_parameters('password', 'refresh_token')(api_view([method])(
             authentication_classes([])(permission_classes([AllowAny])(
-                throttle_classes([LoginThrottle if login else SessionThrottle])(guarded)))))
+                throttle_classes([throttle or (LoginThrottle if login else SessionThrottle)])(guarded)))))
     return decorate
 
 
