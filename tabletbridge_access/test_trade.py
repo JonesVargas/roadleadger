@@ -8,6 +8,28 @@ from .models import AccessGrant,MarketCommand,MarketReservation,TradeBinding,Con
 
 @override_settings(SECURE_SSL_REDIRECT=False,PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
 class TradeTests(TestCase):
+    def test_cancel_before_reserve_and_other_account_cannot_cancel(self):
+        route='market/drafts/'+self.draft+'/cancel'
+        self.assertEqual(self.post(route,token=self.tokens[1]).status_code,404)
+        self.assertEqual(self.post(route).status_code,200)
+        self.assertEqual(self.post(route).status_code,200)
+        self.assertEqual(self.reserve().json()['code'],'draft_cancelled')
+        self.assertEqual(MarketCommand.objects.count(),0)
+
+    def test_cancel_pending_withdrawal_waits_for_saved_receipt_then_refunds_once(self):
+        self.reserve();command=self.command()
+        route='market/drafts/'+self.draft+'/cancel'
+        self.assertEqual(self.post(route).status_code,200)
+        self.assertEqual(self.command()['id'],command['id'])
+        self.assertEqual(MarketCommand.objects.count(),1)
+        self.assertEqual(self.send_receipt(command,self.applied(command,'200','99.999',1)).status_code,200)
+        refund=self.command();self.assertEqual(refund['kind'],'release')
+        self.assertEqual(refund['expectedRevision'],1)
+        self.post(route);self.assertEqual(self.command()['id'],refund['id'])
+        self.assertEqual(self.send_receipt(refund,self.applied(refund,'99.999','200',2)).status_code,200)
+        self.assertIsNone(self.command())
+        self.assertEqual(MarketReservation.objects.get().status,'released')
+        self.assertEqual(MarketCommand.objects.count(),2)
     def test_demand_closed_after_preparation_never_withdraws_new_stock(self):
         demand=ProductDemand.objects.create(status='published',created_by=get_user_model().objects.first())
         item=DemandItem.objects.create(demand=demand,product_name='Trigo',quantity='150',unit='L',unit_price='0.80')

@@ -142,6 +142,11 @@ def observe(request):
             MarketReservation.objects.filter(binding=binding,status__in=['held','requested','release_requested']).update(status='needs_review')
         node.game_session=data['game_session'];node.observed_revision=data['revision'];node.last_seen_at=timezone.now()
         node.save(update_fields=['game_session','observed_revision','last_seen_at'])
+        if not binding.blocked and pending is None:
+            refund=MarketReservation.objects.select_for_update().filter(binding=binding,status='held',draft__cancel_requested=True).first()
+            if refund is not None:
+                pending=MarketCommand.objects.create(reservation=refund,node=node,kind='release',expected_revision=node.observed_revision)
+                refund.status='release_requested';refund.save(update_fields=['status'])
         command=None if binding.blocked else pending
     return Response({'blocked':binding.blocked,'command':command_data(command) if command else None,'commerce_enabled':False})
 
@@ -158,8 +163,11 @@ def reserve(request,draft_id):
     with transaction.atomic():
         draft=MarketDraft.objects.filter(pk=draft_id,farm__user=session.user).first()
         if draft is None:return error('not_found',404)
+        if draft.cancel_requested:return error('draft_cancelled',409)
         binding=TradeBinding.objects.select_for_update().filter(terminal_id=draft.terminal_id,farm=draft.farm).first()
         if binding is None or binding.blocked:return error('terminal_not_ready',409)
+        draft.refresh_from_db(fields=['cancel_requested'])
+        if draft.cancel_requested:return error('draft_cancelled',409)
         existing=MarketReservation.objects.filter(draft=draft).first()
         if existing:return Response({'reservation':reservation_data(existing)})
         if draft.demand_item_id is not None:
@@ -191,6 +199,21 @@ def release(request,reservation_id):
         MarketCommand.objects.create(reservation=reservation,node=node,kind='release',expected_revision=node.observed_revision)
         reservation.status='release_requested';reservation.save(update_fields=['status'])
     return Response({'reservation':reservation_data(reservation)})
+
+
+@endpoint('POST')
+def cancel_draft(request,draft_id):
+    session,failure=authenticated(request)
+    if failure is not None:return failure
+    with transaction.atomic():
+        # Same binding lock as reserve/receipt; no stock credit from a web request.
+        draft=MarketDraft.objects.filter(pk=draft_id,farm__user=session.user).first()
+        if draft is None:return error('not_found',404)
+        TradeBinding.objects.select_for_update().filter(terminal_id=draft.terminal_id,farm=draft.farm).first()
+        draft=MarketDraft.objects.select_for_update().get(pk=draft.pk)
+        draft.cancel_requested=True;draft.save(update_fields=['cancel_requested'])
+        reservation=MarketReservation.objects.filter(draft=draft).first()
+    return Response({'cancel_requested':True,'reservation':reservation_data(reservation) if reservation else None})
 
 
 @endpoint('POST',throttle=NodeThrottle)

@@ -28,7 +28,8 @@ def profile_data(farm):
 
 def draft_data(draft):
     reservation=getattr(draft,'reservation',None)
-    return {'id':str(draft.pk),'status':'draft','product':draft.product,
+    return {'id':str(draft.pk),'status':'cancelled' if draft.cancel_requested and (not reservation or reservation.status in ('released','rejected')) else 'draft',
+        'cancel_requested':draft.cancel_requested,'product':draft.product,
         'quantity_liters':str(draft.quantity_liters),'price_per_thousand':str(draft.price_per_thousand),
         'terminal_id':draft.terminal_id,'created_at':draft.created_at.isoformat(),
         'stock_verified':False,'reserved_liters':str(draft.quantity_liters) if reservation and reservation.status=='held' else '0.000',

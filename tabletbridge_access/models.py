@@ -79,6 +79,7 @@ class FarmProfile(models.Model):
 
 
 class MarketDraft(models.Model):
+    cancel_requested = models.BooleanField(default=False)
     """A saved intention. Never public stock, reservation or executed trade."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     farm = models.ForeignKey(FarmProfile, on_delete=models.PROTECT, related_name='market_drafts')
