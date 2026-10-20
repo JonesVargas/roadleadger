@@ -3,11 +3,35 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
-from .models import AccessGrant, FarmProfile, MarketDraft
+from .models import AccessGrant, FarmProfile, MarketDraft, ProductDemand, DemandItem
 
 
 @override_settings(SECURE_SSL_REDIRECT=False,PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
 class MarketTests(TestCase):
+    def test_cooperative_proposal_uses_published_product_quantity_and_exact_unit_price(self):
+        self.post('profile',{'name':'Boa Vista'})
+        demand=ProductDemand.objects.create(status='published',created_by=get_user_model().objects.first())
+        item=DemandItem.objects.create(demand=demand,product_name='Trigo',quantity='150.000',unit='L',unit_price='0.80')
+        payload=dict(self.payload,demand_item_id=item.pk)
+        response=self.post('drafts',payload)
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json()['draft']['demand']['item_id'],item.pk)
+        self.assertFalse(response.json()['settlement_enabled'])
+        self.assertEqual(self.post('drafts',payload).json(),response.json())
+        self.assertEqual(MarketDraft.objects.count(),1)
+        for changes in ({'product':'BARLEY'},{'quantity_liters':'151'},{'price_per_thousand':'801'}):
+            bad=dict(payload,request_key=str(uuid.uuid4()),**changes)
+            self.assertEqual(self.post('drafts',bad).status_code,409)
+        demand.status='closed';demand.save()
+        self.assertEqual(self.post('drafts',dict(payload,request_key=str(uuid.uuid4()))).status_code,409)
+        self.assertEqual(self.post('drafts',payload).status_code,200)
+
+    def test_cooperative_never_converts_kilos_to_liters(self):
+        self.post('profile',{'name':'Boa Vista'})
+        demand=ProductDemand.objects.create(status='published',created_by=get_user_model().objects.first())
+        item=DemandItem.objects.create(demand=demand,product_name='Trigo',quantity='150',unit='kg',unit_price='0.80')
+        self.assertEqual(self.post('drafts',dict(self.payload,demand_item_id=item.pk)).status_code,409)
+        self.assertEqual(MarketDraft.objects.count(),0)
     def setUp(self):
         cache.clear();self.client=APIClient();self.tokens=[]
         for name in ('seller','buyer'):

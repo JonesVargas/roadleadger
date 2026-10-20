@@ -8,7 +8,8 @@ import json
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.response import Response
-from .models import FarmProfile,MarketDraft,TradeBinding,ConnectorNode,MarketReservation,MarketCommand
+from .models import FarmProfile,MarketDraft,TradeBinding,ConnectorNode,MarketReservation,MarketCommand,DemandItem
+from .demand_products import demand_matches
 from .views import endpoint,authenticated,error
 from .service import digest,decision
 from rest_framework.throttling import SimpleRateThrottle
@@ -161,6 +162,9 @@ def reserve(request,draft_id):
         if binding is None or binding.blocked:return error('terminal_not_ready',409)
         existing=MarketReservation.objects.filter(draft=draft).first()
         if existing:return Response({'reservation':reservation_data(existing)})
+        if draft.demand_item_id is not None:
+            item=DemandItem.objects.select_for_update().select_related('demand').filter(pk=draft.demand_item_id).first()
+            if item is None or not demand_matches(item,draft.product,draft.quantity_liters,draft.price_per_thousand):return error('demand_unavailable',409)
         node=live_node(binding)
         if node is None:return error('connector_offline',409)
         if node.game_session!=draft.game_session:return error('game_session_changed',409)

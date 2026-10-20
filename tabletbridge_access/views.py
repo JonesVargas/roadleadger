@@ -13,6 +13,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from .models import DeviceSession, ProductDemand
 from django.core.paginator import Paginator
 from .service import decision, digest, identity, rotate
+from .demand_products import product_key
 
 
 class LoginThrottle(SimpleRateThrottle):
@@ -140,5 +141,5 @@ def demands(request):
     return Response({'buyer':'Cooperativa RoadLedger','commerce_enabled':False,'page':page.number,
         'pages':page.paginator.num_pages,'demands':[{'id':d.pk,'buyer':'Cooperativa RoadLedger',
         'duration':'indefinite','status':d.status,'total':str(d.total),
-        'items':[{'product':i.product_name,'quantity':str(i.quantity),'unit':i.unit,
+        'items':[{'id':i.pk,'fill_type':product_key(i.product_name),'product':i.product_name,'quantity':str(i.quantity),'unit':i.unit,
                   'unit_price':str(i.unit_price),'total':str(i.total)} for i in d.items.all()]} for d in page]})

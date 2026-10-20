@@ -82,6 +82,7 @@ class MarketDraft(models.Model):
     """A saved intention. Never public stock, reservation or executed trade."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     farm = models.ForeignKey(FarmProfile, on_delete=models.PROTECT, related_name='market_drafts')
+    demand_item = models.ForeignKey(DemandItem,on_delete=models.PROTECT,null=True,blank=True,related_name='market_proposals')
     request_key = models.UUIDField()
     terminal_id = models.CharField(max_length=128)
     game_session = models.CharField(max_length=128)

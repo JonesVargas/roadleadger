@@ -6,7 +6,8 @@ from decimal import Decimal, InvalidOperation
 from django.core.paginator import Paginator
 from django.db import transaction
 from rest_framework.response import Response
-from .models import FarmProfile, MarketDraft
+from .models import FarmProfile, MarketDraft, DemandItem
+from .demand_products import demand_matches
 from .views import endpoint, authenticated, error
 
 
@@ -31,7 +32,8 @@ def draft_data(draft):
         'quantity_liters':str(draft.quantity_liters),'price_per_thousand':str(draft.price_per_thousand),
         'terminal_id':draft.terminal_id,'created_at':draft.created_at.isoformat(),
         'stock_verified':False,'reserved_liters':str(draft.quantity_liters) if reservation and reservation.status=='held' else '0.000',
-        'reservation':{'id':str(reservation.pk),'status':reservation.status} if reservation else None}
+        'reservation':{'id':str(reservation.pk),'status':reservation.status} if reservation else None,
+        'demand':{'item_id':draft.demand_item_id,'demand_id':draft.demand_item.demand_id,'buyer':'Cooperativa RoadLedger'} if draft.demand_item_id else None}
 
 
 def capabilities():
@@ -45,7 +47,7 @@ def market(request):
     session,failure=authenticated(request)
     if failure is not None:return failure
     farm=FarmProfile.objects.filter(user=session.user).first()
-    page=Paginator(MarketDraft.objects.filter(farm=farm).select_related('reservation'),20).get_page(request.GET.get('page'))
+    page=Paginator(MarketDraft.objects.filter(farm=farm).select_related('reservation','demand_item'),20).get_page(request.GET.get('page'))
     return Response(dict(capabilities(),profile=profile_data(farm) if farm else None,
         drafts=[draft_data(d) for d in page],page=page.number,pages=page.paginator.num_pages))
 
@@ -96,17 +98,22 @@ def save_draft(request):
         quantity=decimal_field(data,'quantity_liters','.001','999999999.999')
         observed=decimal_field(data,'observed_liters','.001','999999999.999')
         price=decimal_field(data,'price_per_thousand','.01','999999999.99')
+        demand_item_id=data.get('demand_item_id')
+        if demand_item_id is not None and (type(demand_item_id) is not int or not 1<=demand_item_id<=2147483647):raise ValueError()
         if quantity>observed:raise ValueError()
     except (ValueError,TypeError,AttributeError,InvalidOperation):return error('invalid_draft',400)
     with transaction.atomic():
         farm=FarmProfile.objects.select_for_update().filter(user=session.user).first()
         if farm is None:return error('property_required',409)
         fields=dict(terminal_id=terminal,game_session=game,product=product,quantity_liters=quantity,
-                    price_per_thousand=price,observed_liters=observed)
+                    price_per_thousand=price,observed_liters=observed,demand_item_id=demand_item_id)
         previous=MarketDraft.objects.filter(farm=farm,request_key=key).first()
         if previous:
             if any(getattr(previous,k)!=v for k,v in fields.items()):return error('request_conflict',409)
             return Response(dict(capabilities(),draft=draft_data(previous)))
         if farm.market_drafts.count()>=100:return error('draft_limit',409)
+        if demand_item_id is not None:
+            item=DemandItem.objects.select_for_update().select_related('demand').filter(pk=demand_item_id).first()
+            if item is None or not demand_matches(item,product,quantity,price):return error('demand_unavailable',409)
         draft=MarketDraft.objects.create(farm=farm,request_key=key,**fields)
     return Response(dict(capabilities(),draft=draft_data(draft)))

@@ -3,11 +3,19 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase,override_settings
 from rest_framework.test import APIClient
-from .models import AccessGrant,MarketCommand,MarketReservation,TradeBinding,ConnectorNode
+from .models import AccessGrant,MarketCommand,MarketReservation,TradeBinding,ConnectorNode,ProductDemand,DemandItem,MarketDraft
 
 
 @override_settings(SECURE_SSL_REDIRECT=False,PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'])
 class TradeTests(TestCase):
+    def test_demand_closed_after_preparation_never_withdraws_new_stock(self):
+        demand=ProductDemand.objects.create(status='published',created_by=get_user_model().objects.first())
+        item=DemandItem.objects.create(demand=demand,product_name='Trigo',quantity='150',unit='L',unit_price='0.80')
+        MarketDraft.objects.filter(pk=self.draft).update(demand_item=item)
+        demand.status='closed';demand.save()
+        self.assertEqual(self.reserve().status_code,409)
+        self.assertEqual(MarketCommand.objects.count(),0)
+
     def setUp(self):
         cache.clear();self.client=APIClient();self.tokens=[]
         for name in ('seller','other'):
