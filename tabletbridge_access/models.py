@@ -57,8 +57,9 @@ class DemandItem(models.Model):
     quantity = models.DecimalField('Quantidade solicitada', max_digits=15, decimal_places=3,
                                   validators=[MinValueValidator(Decimal('0.001'))])
     unit = models.CharField('Unidade', max_length=8, default='L', choices=[('L', 'Litros'), ('kg', 'Quilos'), ('un', 'Unidades')])
-    unit_price = models.DecimalField('Valor por unidade (moedas do jogo)', max_digits=14, decimal_places=2,
-                                    validators=[MinValueValidator(Decimal('0'))])
+    unit_price = models.DecimalField('Preço por 1.000 L (ou por kg/un)', max_digits=14, decimal_places=2,
+                                    validators=[MinValueValidator(Decimal('0'))],
+                                    help_text='Em litros, informe o preço de 1.000 L. Para kg e unidades, informe o preço de uma unidade. Valores na moeda do jogo.')
 
     class Meta:
         ordering = ['pk']
@@ -66,7 +67,13 @@ class DemandItem(models.Model):
                        models.CheckConstraint(condition=models.Q(unit_price__gte=0), name='tb_demand_price_nonnegative')]
 
     @property
-    def total(self): return (self.quantity*self.unit_price).quantize(Decimal('.01'))
+    def price_basis(self): return 1000 if self.unit=='L' else 1
+
+    @property
+    def price_label(self): return '1.000 L' if self.unit=='L' else self.unit
+
+    @property
+    def total(self): return (self.quantity*self.unit_price/self.price_basis).quantize(Decimal('.01'))
 
 
 class FarmProfile(models.Model):
@@ -156,3 +163,31 @@ class MarketCommand(models.Model):
         constraints=[
             models.UniqueConstraint(fields=['reservation','kind'],condition=models.Q(status__in=['pending','applied']),name='tb_reservation_command_kind'),
             models.UniqueConstraint(fields=['node'],condition=models.Q(status='pending'),name='tb_one_pending_trade_command')]
+
+
+class MarketOffer(models.Model):
+    id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    reservation = models.OneToOneField(MarketReservation,on_delete=models.PROTECT,related_name='offer')
+    status = models.CharField(max_length=20,default='published',choices=[('published','Publicado'),('negotiating','Em negociação'),('cancelled','Cancelado')])
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=['-created_at','-pk']
+
+
+class PurchaseRequest(models.Model):
+    id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
+    offer = models.ForeignKey(MarketOffer,on_delete=models.PROTECT,related_name='purchase_requests')
+    buyer = models.ForeignKey(FarmProfile,on_delete=models.PROTECT,related_name='purchase_requests')
+    destination = models.ForeignKey(TradeBinding,on_delete=models.PROTECT)
+    request_key = models.UUIDField()
+    status = models.CharField(max_length=20,default='requested',choices=[('requested','Aguardando vendedor'),('accepted','Acordado; pagamento pendente'),('declined','Recusado'),('cancelled','Cancelado')])
+    quantity_liters = models.DecimalField(max_digits=15,decimal_places=3)
+    price_per_thousand = models.DecimalField(max_digits=12,decimal_places=2)
+    total = models.DecimalField(max_digits=15,decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        ordering=['-created_at','-pk']
+        constraints=[
+            models.UniqueConstraint(fields=['buyer','request_key'],name='tb_purchase_retry'),
+            models.UniqueConstraint(fields=['offer'],condition=models.Q(status__in=['requested','accepted']),name='tb_one_active_purchase'),
+            models.CheckConstraint(condition=models.Q(quantity_liters__gt=0,total__gt=0),name='tb_purchase_positive')]

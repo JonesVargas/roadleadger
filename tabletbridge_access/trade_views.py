@@ -12,6 +12,7 @@ from .models import FarmProfile,MarketDraft,TradeBinding,ConnectorNode,MarketRes
 from .demand_products import demand_matches
 from .views import endpoint,authenticated,error
 from .service import digest,decision
+from .commerce_views import withdraw_offer
 from rest_framework.throttling import SimpleRateThrottle
 
 
@@ -193,6 +194,7 @@ def release(request,reservation_id):
         reservation=MarketReservation.objects.select_for_update().select_related('binding','draft').get(pk=reservation.pk)
         if reservation.status in ('released','release_requested'):return Response({'reservation':reservation_data(reservation)})
         if reservation.status!='held' or binding.blocked:return error('terminal_not_ready',409)
+        if not withdraw_offer(reservation):return error('offer_busy',409)
         node=live_node(binding)
         if node is None:return error('connector_offline',409)
         if MarketCommand.objects.filter(node=node,status='pending').exists():return error('trade_busy',409)
@@ -211,6 +213,8 @@ def cancel_draft(request,draft_id):
         if draft is None:return error('not_found',404)
         TradeBinding.objects.select_for_update().filter(terminal_id=draft.terminal_id,farm=draft.farm).first()
         draft=MarketDraft.objects.select_for_update().get(pk=draft.pk)
+        reservation=MarketReservation.objects.filter(draft=draft).first()
+        if reservation and not withdraw_offer(reservation):return error('offer_busy',409)
         draft.cancel_requested=True;draft.save(update_fields=['cancel_requested'])
         reservation=MarketReservation.objects.filter(draft=draft).first()
     return Response({'cancel_requested':True,'reservation':reservation_data(reservation) if reservation else None})

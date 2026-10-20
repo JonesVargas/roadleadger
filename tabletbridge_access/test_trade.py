@@ -32,7 +32,7 @@ class TradeTests(TestCase):
         self.assertEqual(MarketCommand.objects.count(),2)
     def test_demand_closed_after_preparation_never_withdraws_new_stock(self):
         demand=ProductDemand.objects.create(status='published',created_by=get_user_model().objects.first())
-        item=DemandItem.objects.create(demand=demand,product_name='Trigo',quantity='150',unit='L',unit_price='0.80')
+        item=DemandItem.objects.create(demand=demand,product_name='Trigo',quantity='150',unit='L',unit_price='800.00')
         MarketDraft.objects.filter(pk=self.draft).update(demand_item=item)
         demand.status='closed';demand.save()
         self.assertEqual(self.reserve().status_code,409)

@@ -142,4 +142,4 @@ def demands(request):
         'pages':page.paginator.num_pages,'demands':[{'id':d.pk,'buyer':'Cooperativa RoadLedger',
         'duration':'indefinite','status':d.status,'total':str(d.total),
         'items':[{'id':i.pk,'fill_type':product_key(i.product_name),'product':i.product_name,'quantity':str(i.quantity),'unit':i.unit,
-                  'unit_price':str(i.unit_price),'total':str(i.total)} for i in d.items.all()]} for d in page]})
+                  'unit_price':str(i.unit_price),'price_basis':i.price_basis,'price_label':i.price_label,'total':str(i.total)} for i in d.items.all()]} for d in page]})

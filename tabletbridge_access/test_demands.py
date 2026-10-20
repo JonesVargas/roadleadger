@@ -23,8 +23,20 @@ class DemandTests(TestCase):
     def payload(self,status='published'):
         return {'demand-status':status,'items-TOTAL_FORMS':'2','items-INITIAL_FORMS':'0',
           'items-MIN_NUM_FORMS':'1','items-MAX_NUM_FORMS':'20',
-          'items-0-product_name':'Trigo','items-0-quantity':'30000','items-0-unit':'L','items-0-unit_price':'0.80',
-          'items-1-product_name':'Cevada','items-1-quantity':'20000','items-1-unit':'L','items-1-unit_price':'0.90'}
+          'items-0-product_name':'Trigo','items-0-quantity':'30000','items-0-unit':'L','items-0-unit_price':'800.00',
+          'items-1-product_name':'Cevada','items-1-quantity':'20000','items-1-unit':'L','items-1-unit_price':'900.00'}
+
+    def test_price_per_thousand_liters_preserves_entered_price_and_other_units(self):
+        demand=ProductDemand.objects.create(created_by=self.admin)
+        item=DemandItem.objects.create(demand=demand,product_name='Trigo',quantity=100000,unit='L',unit_price=350)
+        item.refresh_from_db()
+        self.assertEqual(item.unit_price,Decimal('350'))
+        self.assertEqual(item.total,Decimal('35000.00'))
+        self.assertEqual(item.price_basis,1000);self.assertEqual(item.price_label,'1.000 L')
+        for unit in ('kg','un'):
+            item.unit=unit
+            self.assertEqual(item.total,Decimal('35000000.00'))
+            self.assertEqual(item.price_basis,1)
 
     def test_admin_publishes_multiple_products_indefinite_and_all_validated_players_see_same(self):
         self.client.force_login(self.admin)

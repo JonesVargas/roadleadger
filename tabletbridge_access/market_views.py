@@ -28,8 +28,10 @@ def profile_data(farm):
 
 def draft_data(draft):
     reservation=getattr(draft,'reservation',None)
+    offer=getattr(reservation,'offer',None) if reservation else None
     return {'id':str(draft.pk),'status':'cancelled' if draft.cancel_requested and (not reservation or reservation.status in ('released','rejected')) else 'draft',
         'cancel_requested':draft.cancel_requested,'product':draft.product,
+        'offer':{'id':str(offer.pk),'status':offer.status} if offer else None,
         'quantity_liters':str(draft.quantity_liters),'price_per_thousand':str(draft.price_per_thousand),
         'terminal_id':draft.terminal_id,'created_at':draft.created_at.isoformat(),
         'stock_verified':False,'reserved_liters':str(draft.quantity_liters) if reservation and reservation.status=='held' else '0.000',
@@ -38,7 +40,7 @@ def draft_data(draft):
 
 
 def capabilities():
-    return {'commerce_enabled':False,'drafts_enabled':True,'reservations_enabled':True,'settlement_enabled':False,
+    return {'commerce_enabled':False,'offers_enabled':True,'purchase_requests_enabled':True,'drafts_enabled':True,'reservations_enabled':True,'settlement_enabled':False,
         'fees':{'sales_tax_percent':'1.50','monthly_property_fee':'25.00','currency':'game'},
         'offers':[], 'message':'Rascunhos e reservas privadas. Compra, entrega e cobrança ainda indisponíveis.'}
 
@@ -48,7 +50,7 @@ def market(request):
     session,failure=authenticated(request)
     if failure is not None:return failure
     farm=FarmProfile.objects.filter(user=session.user).first()
-    page=Paginator(MarketDraft.objects.filter(farm=farm).select_related('reservation','demand_item'),20).get_page(request.GET.get('page'))
+    page=Paginator(MarketDraft.objects.filter(farm=farm).select_related('reservation__offer','demand_item'),20).get_page(request.GET.get('page'))
     return Response(dict(capabilities(),profile=profile_data(farm) if farm else None,
         drafts=[draft_data(d) for d in page],page=page.number,pages=page.paginator.num_pages))
 

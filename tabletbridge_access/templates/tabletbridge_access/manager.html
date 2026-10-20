@@ -6,18 +6,25 @@
 <form method="get" class="admin-form"><label>Buscar nome ou e-mail<input name="q" value="{{ query }}" maxlength="150"></label><button class="button small">Buscar</button></form>
 {% for entry in players %}<details class="panel admin-editor"><summary>{{ entry.user.full_name }} · {{ entry.user.email }} · {{ entry.state }}</summary><form method="post" action="{% url 'tabletbridge-grant' entry.user.pk %}" class="admin-form">{% csrf_token %}{{ entry.form.as_p }}<button class="button small">Salvar acesso TabletBridge</button></form></details>{% endfor %}
 <nav class="form-actions">{% if players_page.has_previous %}<a href="?q={{ query|urlencode }}&players_page={{ players_page.previous_page_number }}">Anterior</a>{% endif %}<span>{{ players_page.number }} / {{ players_page.paginator.num_pages }}</span>{% if players_page.has_next %}<a href="?q={{ query|urlencode }}&players_page={{ players_page.next_page_number }}">Próxima</a>{% endif %}</nav></article></section>
-<section class="section admin-grid form-first"><form class="panel admin-form" method="post">{% csrf_token %}<h2>{% if demand.pk %}Editar demanda #{{ demand.pk }}{% else %}Criar demanda da Cooperativa RoadLedger{% endif %}</h2><p>Para todos os players cadastrados e autorizados, sem destinatário específico ou vencimento. Valores por unidade, na moeda do jogo.</p>{{ demand_form.as_p }}{{ items.management_form }}{{ items.non_form_errors }}
+<section class="section admin-grid form-first"><form class="panel admin-form" method="post">{% csrf_token %}<h2>{% if demand.pk %}Editar demanda #{{ demand.pk }}{% else %}Criar demanda da Cooperativa RoadLedger{% endif %}</h2><p>Para todos os players cadastrados e autorizados, sem destinatário específico ou vencimento. Em litros, o preço é por 1.000 L. Exemplo: 100.000 L a 350 por 1.000 L totalizam 35.000 moedas do jogo. Em kg e unidades, o preço é por uma unidade.</p>{{ demand_form.as_p }}{{ items.management_form }}{{ items.non_form_errors }}
 <div id="demand-items">{% for item in items %}<fieldset class="panel"><legend>Produto {{ forloop.counter }}</legend>{{ item.as_p }}</fieldset>{% endfor %}</div>
 <template id="empty-item"><fieldset class="panel"><legend>Produto adicional</legend>{{ items.empty_form.as_p }}</fieldset></template>
 <button class="button ghost small" type="button" id="add-item">Adicionar produto</button><button class="button" type="submit">Salvar demanda</button><a href="{% url 'tabletbridge-manager' %}">Nova demanda</a>
 <p>Nenhum produto é reservado ou transferido e nenhum valor é cobrado ou pago ao salvar.</p></form>
 <article class="panel"><h2>Demandas cadastradas</h2>{% for demand in demands %}<div class="admin-list"><div><strong>Cooperativa RoadLedger · Demanda #{{ demand.pk }}</strong><small>{{ demand.get_status_display }} · {{ demand.items.count }} produtos · sem vencimento</small></div><a href="{% url 'tabletbridge-demand-edit' demand.pk %}">Editar</a></div>{% empty %}<p>Nenhuma demanda cadastrada.</p>{% endfor %}<nav class="form-actions">{% if demands.has_previous %}<a href="?demands_page={{ demands.previous_page_number }}">Anterior</a>{% endif %}<span>{{ demands.number }} / {{ demands.paginator.num_pages }}</span>{% if demands.has_next %}<a href="?demands_page={{ demands.next_page_number }}">Próxima</a>{% endif %}</nav></article></section>
 <script>
+function updatePriceLabel(select){
+ const label=document.querySelector('label[for="'+select.id.replace(/-unit$/,'-unit_price')+'"]');
+ if(label)label.textContent=select.value==='L'?'Preço por 1.000 L (moedas do jogo):':('Preço por '+select.value+' (moedas do jogo):');
+}
+document.querySelectorAll('#demand-items select[name$="-unit"]').forEach(updatePriceLabel);
+document.getElementById('demand-items').addEventListener('change',function(event){if(event.target.matches('select[name$="-unit"]'))updatePriceLabel(event.target);});
 document.getElementById('add-item').addEventListener('click',function(){
  const total=document.getElementById('id_items-TOTAL_FORMS'), count=Number(total.value);
  if(count>=20){this.disabled=true;return;}
  const html=document.getElementById('empty-item').innerHTML.replace(/__prefix__/g,String(count));
  document.getElementById('demand-items').insertAdjacentHTML('beforeend',html);total.value=count+1;
+ document.querySelectorAll('#demand-items select[name$="-unit"]').forEach(updatePriceLabel);
 });
 </script>
 {% endblock %}

@@ -11,7 +11,7 @@ class MarketTests(TestCase):
     def test_cooperative_proposal_uses_published_product_quantity_and_exact_unit_price(self):
         self.post('profile',{'name':'Boa Vista'})
         demand=ProductDemand.objects.create(status='published',created_by=get_user_model().objects.first())
-        item=DemandItem.objects.create(demand=demand,product_name='Trigo',quantity='150.000',unit='L',unit_price='0.80')
+        item=DemandItem.objects.create(demand=demand,product_name='Trigo',quantity='150.000',unit='L',unit_price='800.00')
         payload=dict(self.payload,demand_item_id=item.pk)
         response=self.post('drafts',payload)
         self.assertEqual(response.status_code,200)
