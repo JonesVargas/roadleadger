@@ -40,7 +40,7 @@ def draft_data(draft):
 
 
 def capabilities():
-    return {'commerce_enabled':False,'offers_enabled':True,'purchase_requests_enabled':True,'drafts_enabled':True,'reservations_enabled':True,'settlement_enabled':False,
+    return {'commerce_enabled':False,'cooperative_fulfillment_enabled':True,'offers_enabled':True,'purchase_requests_enabled':True,'drafts_enabled':True,'reservations_enabled':True,'settlement_enabled':False,
         'fees':{'sales_tax_percent':'1.50','monthly_property_fee':'25.00','currency':'game'},
         'offers':[], 'message':'Rascunhos e reservas privadas. Compra, entrega e cobrança ainda indisponíveis.'}
 

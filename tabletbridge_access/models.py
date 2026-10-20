@@ -75,6 +75,33 @@ class DemandItem(models.Model):
     @property
     def total(self): return (self.quantity*self.unit_price/self.price_basis).quantize(Decimal('.01'))
 
+    def progress(self):
+        totals={'delivered':self._delivered,'reserved':self._reserved} if hasattr(self,'_delivered') else self.market_proposals.aggregate(
+            delivered=models.Sum('quantity_liters',filter=models.Q(reservation__status='fulfilled')),
+            reserved=models.Sum('quantity_liters',filter=models.Q(reservation__status__in=(
+                'requested','held','release_requested','fulfill_requested','needs_review'))))
+        delivered=totals['delivered'] or Decimal('0.000');reserved=totals['reserved'] or Decimal('0.000')
+        remaining=max(Decimal('0.000'),self.quantity-delivered)
+        return dict(delivered=delivered,reserved=reserved,remaining=remaining,available=max(Decimal('0.000'),remaining-reserved))
+
+    @classmethod
+    def with_progress(cls):
+        return cls.objects.annotate(
+            _delivered=models.Sum('market_proposals__quantity_liters',filter=models.Q(market_proposals__reservation__status='fulfilled')),
+            _reserved=models.Sum('market_proposals__quantity_liters',filter=models.Q(market_proposals__reservation__status__in=(
+                'requested','held','release_requested','fulfill_requested','needs_review'))))
+
+    def clean(self):
+        super().clean()
+        if self.pk:
+            from django.core.exceptions import ValidationError
+            old=type(self).objects.get(pk=self.pk)
+            progress=old.progress()
+            if self.quantity is not None and self.quantity<progress['delivered']+progress['reserved']:
+                raise ValidationError({'quantity':'A quantidade não pode ser menor que as entregas e reservas já confirmadas.'})
+            if progress['delivered']+progress['reserved']>0 and (old.unit!=self.unit or old.product_name!=self.product_name):
+                raise ValidationError('Não altere o produto ou unidade enquanto houver entregas ou reservas vinculadas.')
+
 
 class FarmProfile(models.Model):
     """Account identity; this is not proof of ownership of an FS save."""
@@ -121,6 +148,7 @@ class TradeBinding(models.Model):
 
 
 class ConnectorNode(models.Model):
+    fulfillment_protocol = models.PositiveSmallIntegerField(default=0)
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     binding = models.ForeignKey(TradeBinding,on_delete=models.PROTECT,null=True,related_name='connectors')
     terminal_id = models.CharField(max_length=128)
@@ -145,15 +173,18 @@ class MarketReservation(models.Model):
     status = models.CharField(max_length=24,default='requested',choices=[
         ('requested','Aguardando reserva no jogo'),('held','Reservado no jogo'),
         ('release_requested','Aguardando devolução'),('released','Devolvido'),
+        ('fulfill_requested','Entrega e pagamento em confirmação'),('fulfilled','Entregue e pago'),
         ('rejected','Não reservado'),('needs_review','Requer conferência')])
     created_at = models.DateTimeField(auto_now_add=True)
 
 
 class MarketCommand(models.Model):
+    amount_cents = models.PositiveBigIntegerField(default=0)
+    game_session = models.CharField(max_length=128,blank=True)
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     reservation = models.ForeignKey(MarketReservation,on_delete=models.PROTECT,related_name='commands')
     node = models.ForeignKey(ConnectorNode,on_delete=models.PROTECT)
-    kind = models.CharField(max_length=10,choices=[('reserve','Reservar'),('release','Devolver')])
+    kind = models.CharField(max_length=10,choices=[('reserve','Reservar'),('release','Devolver'),('fulfill','Entregar à cooperativa')])
     expected_revision = models.PositiveIntegerField()
     status = models.CharField(max_length=12,default='pending',choices=[('pending','Pendente'),('applied','Salvo no jogo'),('rejected','Recusado'),('uncertain','Requer conferência')])
     receipt = models.JSONField(default=dict)

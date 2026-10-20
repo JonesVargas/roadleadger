@@ -12,4 +12,4 @@ def product_key(name):
     return next((key for key,label in PRODUCTS.items() if name in (normalized(key),normalized(label))),None)
 def demand_matches(item,product,quantity,price):
     return (item.demand.status=='published' and item.unit=='L' and product_key(item.product_name)==product
-        and quantity<=item.quantity and item.unit_price>0 and price==item.unit_price)
+        and quantity<=item.progress()['available'] and item.unit_price>0 and price==item.unit_price)

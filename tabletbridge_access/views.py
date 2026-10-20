@@ -4,13 +4,14 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 from django.views.decorators.debug import sensitive_variables, sensitive_post_parameters
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
-from .models import DeviceSession, ProductDemand
+from .models import DeviceSession, ProductDemand, DemandItem
 from django.core.paginator import Paginator
 from .service import decision, digest, identity, rotate
 from .demand_products import product_key
@@ -137,9 +138,13 @@ def logout(request):
 def demands(request):
     session, failure=authenticated(request)
     if failure is not None: return failure
-    page=Paginator(ProductDemand.objects.filter(status='published').prefetch_related('items'),20).get_page(request.GET.get('page'))
-    return Response({'buyer':'Cooperativa RoadLedger','commerce_enabled':False,'page':page.number,
+    page=Paginator(ProductDemand.objects.filter(status='published').prefetch_related(Prefetch('items',queryset=DemandItem.with_progress())),1).get_page(request.GET.get('page'))
+    def item_data(item):
+        progress=item.progress()
+        return {'id':item.pk,'fill_type':product_key(item.product_name),'product':item.product_name,'quantity':str(item.quantity),
+            'unit':item.unit,'unit_price':str(item.unit_price),'price_basis':item.price_basis,'price_label':item.price_label,'total':str(item.total),
+            **{name+'_quantity':str(value) for name,value in progress.items()}}
+    return Response({'buyer':'Cooperativa RoadLedger','commerce_enabled':False,'cooperative_fulfillment_enabled':True,'page':page.number,
         'pages':page.paginator.num_pages,'demands':[{'id':d.pk,'buyer':'Cooperativa RoadLedger',
         'duration':'indefinite','status':d.status,'total':str(d.total),
-        'items':[{'id':i.pk,'fill_type':product_key(i.product_name),'product':i.product_name,'quantity':str(i.quantity),'unit':i.unit,
-                  'unit_price':str(i.unit_price),'price_basis':i.price_basis,'price_label':i.price_label,'total':str(i.total)} for i in d.items.all()]} for d in page]})
+        'items':[item_data(i) for i in d.items.all()]} for d in page]})

@@ -2,13 +2,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q,Prefetch
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth import get_user_model
 from django.views.decorators.http import require_POST
 from audit.models import AuditEvent
-from .models import AccessGrant, ProductDemand
+from .models import AccessGrant, ProductDemand,DemandItem
 from .forms import GrantForm, DemandForm, DemandItems
 from .service import decision
 
@@ -67,5 +67,5 @@ def grant_access(request,user_id):
 def demands(request):
     if decision(request.user)[0]!='authorized':
         return HttpResponseForbidden('O acesso específico ao TabletBridge não está liberado para esta conta.')
-    page=Paginator(ProductDemand.objects.filter(status='published').prefetch_related('items'),10).get_page(request.GET.get('page'))
+    page=Paginator(ProductDemand.objects.filter(status='published').prefetch_related(Prefetch('items',queryset=DemandItem.with_progress())),10).get_page(request.GET.get('page'))
     return render(request,'tabletbridge_access/demands.html',{'demands':page})

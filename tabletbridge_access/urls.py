@@ -19,5 +19,6 @@ urlpatterns = [path('login/', views.login), path('me/', views.me),
                path('market/drafts/<uuid:draft_id>/reserve/',trade_views.reserve),
                path('market/drafts/<uuid:draft_id>/cancel/',trade_views.cancel_draft),
                path('market/reservations/<uuid:reservation_id>/release/',trade_views.release),
+               path('market/reservations/<uuid:reservation_id>/fulfill/',trade_views.fulfill),
                path('node/begin/',trade_views.begin),path('node/state/',trade_views.state),
                path('node/observe/',trade_views.observe),path('node/commands/<uuid:command_id>/receipt/',trade_views.receipt)]
