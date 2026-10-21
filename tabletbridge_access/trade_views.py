@@ -71,8 +71,13 @@ def begin(request):
 def state(request):
     node,failure=node_auth(request,allow_pending=True)
     if failure is not None:return failure
+    recovery=None
+    if node.binding and node.binding.blocked:
+        candidate=MarketCommand.objects.select_related('reservation__draft','reservation__binding').filter(node=node,status='uncertain').order_by('-created_at').first()
+        if candidate is not None:
+            recovery={'command':command_data(candidate),'reason':candidate.receipt.get('receipt',{}).get('code')}
     return Response({'node_id':str(node.pk),'approved':node.approved_at is not None,
-        'terminal_id':node.terminal_id,'blocked':bool(node.binding and node.binding.blocked)})
+        'terminal_id':node.terminal_id,'blocked':bool(node.binding and node.binding.blocked),'recovery':recovery})
 
 
 @endpoint('POST')
@@ -274,9 +279,25 @@ def receipt(request,command_id):
         binding=TradeBinding.objects.select_for_update().get(pk=node.binding_id)
         command=MarketCommand.objects.select_for_update().select_related('reservation__draft','reservation__binding').filter(pk=command_id,node=node).first()
         if command is None:return error('not_found',404)
-        if command.status!='pending':
+        if command.status=='applied' and command.receipt==data:
+            return Response({'recorded':True,'status':command.status})
+        # Deliberate operator reconciliation, never a new native money command.
+        # Only the specific cooperative payout quarantined by balance drift is
+        # eligible. Peer settlements and unknown/rollback blocks stay closed.
+        recovery=data.get('recovery_ack')=='payment_received_and_saved'
+        if recovery:
+            from .models import PurchaseRequest
+            prior=command.receipt.get('receipt',{})
+            if (command.status!='uncertain' or command.kind!='fulfill' or
+                prior.get('code')!='payment_save_mismatch' or not binding.blocked or
+                command.game_session==node.game_session or binding.anchor_revision!=command.expected_revision or
+                node.observed_revision!=command.expected_revision+1 or command.reservation.draft.demand_item_id is None or
+                MarketCommand.objects.filter(reservation__binding=binding,status__in=['pending','uncertain']).exclude(pk=command.pk).exists() or
+                PurchaseRequest.objects.filter(offer__reservation=command.reservation).exists()):return error('recovery_not_allowed',409)
+        elif command.status!='pending':
             return Response({'recorded':True,'status':command.status}) if command.receipt==data else error('receipt_conflict',409)
         expected=command_data(command);row=data.get('receipt')
+        if recovery and (not isinstance(row,dict) or row.get('status')!='applied' or any(row.get(k)!=prior.get(k) for k in ('id','reservationId','kind','product','milliLiters','farmId','revision','amountCents'))):return error('recovery_not_allowed',409)
         if not isinstance(row,dict) or type(row.get('milliLiters')) is not int or type(row.get('farmId')) is not int or any(row.get(k)!=expected[k] for k in ('id','reservationId','kind','product','milliLiters','farmId')):return error('invalid_receipt',400)
         status=row.get('status')
         if status not in ('applied','rejected','uncertain'):return error('invalid_receipt',400)
@@ -291,12 +312,15 @@ def receipt(request,command_id):
                 try:
                     money_before=Decimal(str(row['moneyBefore']));money_after=Decimal(str(row['moneyAfter']))
                     saved_balance=Decimal(str(data['saved_balance']))
+                    if recovery and any(abs(Decimal(str(row[k]))-Decimal(str(prior.get(k))))>Decimal('.000001') for k in ('moneyBefore','moneyAfter')):raise ValueError()
                     direction=-1 if command.kind=='purchase' else 1
                     if type(row.get('amountCents')) is not int or row['amountCents']!=command.amount_cents or not all(n.is_finite() and abs(n)<=Decimal('1000000000000') for n in (money_before,money_after,saved_balance)) or abs(money_after-money_before-direction*Decimal(command.amount_cents)/100)>Decimal('.000001'):raise ValueError()
-                    if abs(saved_balance-money_after)>Decimal('.000001'):raise ValueError()
+                    if not recovery and abs(saved_balance-money_after)>Decimal('.000001'):raise ValueError()
                     if not isinstance(data.get('farms_sha256'),str) or not re.fullmatch('[a-f0-9]{64}',data['farms_sha256']):raise ValueError()
                 except (KeyError,ValueError,InvalidOperation):return error('save_receipt_required',409)
-            if binding.blocked:return error('terminal_not_ready',409)
+            if binding.blocked and not recovery:return error('terminal_not_ready',409)
+            if recovery:
+                binding.blocked=False;binding.save(update_fields=['blocked'])
             binding.anchor_revision=max(binding.anchor_revision,row['revision']);binding.save(update_fields=['anchor_revision'])
             ConnectorNode.objects.filter(pk=node.pk).update(observed_revision=max(node.observed_revision,row['revision']))
         elif status=='uncertain':
