@@ -5,6 +5,7 @@ import re
 import secrets
 import uuid
 import json
+import hashlib
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.response import Response
@@ -45,6 +46,7 @@ def command_data(command):
         'terminalId':binding.terminal_id,'farmId':binding.game_farm_id,'product':draft.product,
         'milliLiters':int(draft.quantity_liters*1000),'expectedRevision':command.expected_revision}
     if command.kind in ('fulfill','purchase'):data.update(amountCents=command.amount_cents,gameSession=command.game_session)
+    if draft.asset_kind=='objects':data.update(assetKind='objects',objectCount=draft.object_count,objectData=draft.object_data,amountCents=command.amount_cents)
     return data
 
 
@@ -141,6 +143,7 @@ def observe(request):
     data=request.data
     if not isinstance(data,dict) or not text(data.get('game_session')) or type(data.get('revision')) is not int or not 0<=data['revision']<=256 or data.get('terminal_id')!=node.terminal_id or type(data.get('farm_id')) is not int or data.get('farm_id')!=node.game_farm_id or type(data.get('escrow_protocol')) is not int or data.get('escrow_protocol')!=1:return error('invalid_observation',400)
     if type(data.get('fulfillment_protocol',0)) is not int or data.get('fulfillment_protocol',0) not in (0,1,2):return error('invalid_observation',400)
+    if type(data.get('objects_protocol',0)) is not int or data.get('objects_protocol',0) not in (0,1):return error('invalid_observation',400)
     with transaction.atomic():
         binding=TradeBinding.objects.select_for_update().get(pk=node.binding_id)
         node=ConnectorNode.objects.select_for_update().get(pk=node.pk)
@@ -151,13 +154,14 @@ def observe(request):
             MarketReservation.objects.filter(binding=binding,status__in=['held','requested','release_requested','fulfill_requested']).update(status='needs_review')
         node.game_session=data['game_session'];node.observed_revision=data['revision'];node.last_seen_at=timezone.now()
         node.fulfillment_protocol=data.get('fulfillment_protocol',0)
-        node.save(update_fields=['game_session','observed_revision','last_seen_at','fulfillment_protocol'])
+        node.objects_protocol=data.get('objects_protocol',0)
+        node.save(update_fields=['game_session','observed_revision','last_seen_at','fulfillment_protocol','objects_protocol'])
         if not binding.blocked and pending is None:
             from .settlement import next_payment
             pending=next_payment(node)
         if not binding.blocked and pending is None:
             refund=MarketReservation.objects.select_for_update().filter(binding=binding,status='held',draft__cancel_requested=True).first()
-            if refund is not None:
+            if refund is not None and (refund.draft.asset_kind!='objects' or node.objects_protocol==1):
                 pending=MarketCommand.objects.create(reservation=refund,node=node,kind='release',expected_revision=node.observed_revision)
                 refund.status='release_requested';refund.save(update_fields=['status'])
         command=None if binding.blocked else pending
@@ -182,15 +186,17 @@ def reserve(request,draft_id):
         draft.refresh_from_db(fields=['cancel_requested'])
         if draft.cancel_requested:return error('draft_cancelled',409)
         existing=MarketReservation.objects.filter(draft=draft).first()
-        if existing:return Response({'reservation':reservation_data(existing)})
+        if existing and existing.status!='rejected':return Response({'reservation':reservation_data(existing)})
         if draft.demand_item_id is not None:
             item=DemandItem.objects.select_for_update().select_related('demand').filter(pk=draft.demand_item_id).first()
             if item is None or not demand_matches(item,draft.product,draft.quantity_liters,draft.price_per_thousand):return error('demand_unavailable',409)
         node=live_node(binding)
         if node is None:return error('connector_offline',409)
+        if draft.asset_kind=='objects' and node.objects_protocol!=1:return error('objects_update_required',409)
         if node.game_session!=draft.game_session:return error('game_session_changed',409)
         if MarketCommand.objects.filter(node=node,status='pending').exists():return error('trade_busy',409)
-        reservation=MarketReservation.objects.create(draft=draft,binding=binding)
+        reservation=existing or MarketReservation.objects.create(draft=draft,binding=binding)
+        if existing:reservation.status='requested';reservation.save(update_fields=['status'])
         MarketCommand.objects.create(reservation=reservation,node=node,kind='reserve',expected_revision=node.observed_revision)
     return Response({'reservation':reservation_data(reservation)})
 
@@ -254,6 +260,7 @@ def fulfill(request,reservation_id):
         node=live_node(binding)
         if node is None:return error('connector_offline',409)
         if node.fulfillment_protocol<1:return error('fulfillment_update_required',409)
+        if draft.asset_kind=='objects' and node.objects_protocol!=1:return error('objects_update_required',409)
         if MarketCommand.objects.filter(node=node,status='pending').exists():return error('trade_busy',409)
         # Honor the quote fixed when this lot was reserved, even if the admin
         # changes the price for future participants in the same demand.
@@ -302,6 +309,9 @@ def receipt(request,command_id):
         status=row.get('status')
         if status not in ('applied','rejected','uncertain'):return error('invalid_receipt',400)
         if status=='applied':
+            if command.reservation.draft.asset_kind=='objects':
+                draft=command.reservation.draft
+                if row.get('assetKind')!='objects' or type(row.get('objectCount')) is not int or row['objectCount']!=draft.object_count or data.get('object_manifest_sha256')!=hashlib.sha256(draft.object_data.encode()).hexdigest():return error('save_receipt_required',409)
             try:
                 before=Decimal(str(row.get('before')));after=Decimal(str(row.get('after')))
                 delta=Decimal('0') if command.kind=='fulfill' else Decimal(expected['milliLiters'])/1000*(1 if command.kind in ('release','purchase') else -1)
@@ -315,7 +325,10 @@ def receipt(request,command_id):
                     if recovery and any(abs(Decimal(str(row[k]))-Decimal(str(prior.get(k))))>Decimal('.000001') for k in ('moneyBefore','moneyAfter')):raise ValueError()
                     direction=-1 if command.kind=='purchase' else 1
                     if type(row.get('amountCents')) is not int or row['amountCents']!=command.amount_cents or not all(n.is_finite() and abs(n)<=Decimal('1000000000000') for n in (money_before,money_after,saved_balance)) or abs(money_after-money_before-direction*Decimal(command.amount_cents)/100)>Decimal('.000001'):raise ValueError()
-                    if not recovery and abs(saved_balance-money_after)>Decimal('.000001'):raise ValueError()
+                    marker='|'.join(str(expected[k]) for k in ('id','reservationId','terminalId','farmId'))+'|'+str(row['revision'])+'|'+command.kind+'|'+str(command.amount_cents)
+                    durable=data.get('payment_marker')==marker
+                    if data.get('payment_marker') is not None and not durable:raise ValueError()
+                    if not recovery and not durable and abs(saved_balance-money_after)>Decimal('.000001'):raise ValueError()
                     if not isinstance(data.get('farms_sha256'),str) or not re.fullmatch('[a-f0-9]{64}',data['farms_sha256']):raise ValueError()
                 except (KeyError,ValueError,InvalidOperation):return error('save_receipt_required',409)
             if binding.blocked and not recovery:return error('terminal_not_ready',409)
@@ -325,7 +338,7 @@ def receipt(request,command_id):
             ConnectorNode.objects.filter(pk=node.pk).update(observed_revision=max(node.observed_revision,row['revision']))
         elif status=='uncertain':
             binding.blocked=True;binding.save(update_fields=['blocked'])
-        elif row.get('code') not in {'insufficient_funds','insufficient_stock','refund_capacity_required','unsupported_product','no_permission','reservation_mismatch','journal_limit','reservation_exists','farm_mismatch','singleplayer_required','invalid_command','revision_mismatch','storage_write_failed','storage_not_ready','money_api_unavailable','money_write_failed'}:return error('invalid_receipt',400)
+        elif row.get('code') not in {'object_storage_busy','object_reservation_changed','object_import_failed','object_import_mismatch','object_import_unavailable','insufficient_funds','insufficient_stock','refund_capacity_required','unsupported_product','no_permission','reservation_mismatch','journal_limit','reservation_exists','farm_mismatch','singleplayer_required','invalid_command','revision_mismatch','storage_write_failed','storage_not_ready','money_api_unavailable','money_write_failed'}:return error('invalid_receipt',400)
         command.status=status;command.receipt=data;command.completed_at=timezone.now();command.save(update_fields=['status','receipt','completed_at'])
         reservation=command.reservation
         reservation.status={'reserve':'held','release':'released','fulfill':'fulfilled','purchase':'fulfilled'}[command.kind] if status=='applied' else ('needs_review' if status=='uncertain' else ('rejected' if command.kind in ('reserve','purchase') else 'held'))

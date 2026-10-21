@@ -30,6 +30,7 @@ def draft_data(draft):
     reservation=getattr(draft,'reservation',None)
     offer=getattr(reservation,'offer',None) if reservation else None
     return {'id':str(draft.pk),'status':'cancelled' if draft.cancel_requested and (not reservation or reservation.status in ('released','rejected')) else 'draft',
+        'asset_kind':draft.asset_kind,'object_count':draft.object_count,
         'cancel_requested':draft.cancel_requested,'product':draft.product,
         'offer':{'id':str(offer.pk),'status':offer.status} if offer else None,
         'quantity_liters':str(draft.quantity_liters),'price_per_thousand':str(draft.price_per_thousand),
@@ -107,12 +108,21 @@ def save_draft(request):
         demand_item_id=data.get('demand_item_id')
         if demand_item_id is not None and (type(demand_item_id) is not int or not 1<=demand_item_id<=2147483647):raise ValueError()
         if quantity>observed:raise ValueError()
+        asset_kind=data.get('asset_kind','bulk');object_data=data.get('object_data','');object_count=data.get('object_count',0)
+        if asset_kind not in ('bulk','objects'):raise ValueError()
+        if asset_kind=='objects':
+            from .object_manifest import decode_object
+            if type(object_count) is not int or not 1<=object_count<=128:raise ValueError()
+            manifest=decode_object(object_data)
+            if manifest['product']!=product or manifest['liters']*object_count!=quantity:raise ValueError()
+        elif object_data or object_count:raise ValueError()
     except (ValueError,TypeError,AttributeError,InvalidOperation):return error('invalid_draft',400)
     with transaction.atomic():
         farm=FarmProfile.objects.select_for_update().filter(user=session.user).first()
         if farm is None:return error('property_required',409)
         fields=dict(terminal_id=terminal,game_session=game,product=product,quantity_liters=quantity,
-                    price_per_thousand=price,observed_liters=observed,demand_item_id=demand_item_id)
+                    price_per_thousand=price,observed_liters=observed,demand_item_id=demand_item_id,
+                    asset_kind=asset_kind,object_data=object_data,object_count=object_count)
         previous=MarketDraft.objects.filter(farm=farm,request_key=key).first()
         if previous:
             if any(getattr(previous,k)!=v for k,v in fields.items()):return error('request_conflict',409)

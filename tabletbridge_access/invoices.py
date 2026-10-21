@@ -27,10 +27,15 @@ def quote(draft,buyer=None,legacy_cents=None):
     deductions=[dict(name=label,rate=str(rate),amount=str(cash(gross*Decimal(rate)/100))) for label,rate in rates] if taxed else []
     withheld=sum((Decimal(row['amount']) for row in deductions),Decimal('0.00'))
     net=cash(gross-withheld) if legacy_cents is None else Decimal(legacy_cents)/100
+    presentation='Granel'
+    if draft.asset_kind=='objects':
+        from .object_manifest import decode_object
+        presentation='Fardos' if decode_object(draft.object_data)['className']=='Bale' else 'Paletes'
     return dict(document_type='Nota de transação fictícia · sem valor fiscal',currency='Moeda do jogo',
         seller={'name':draft.farm.name,'cnpj':draft.farm.fictional_cnpj},
         buyer={'name':buyer.name,'cnpj':buyer.fictional_cnpj} if buyer else {'name':'Cooperativa RoadLedger','cnpj':'Não se aplica · comprador do sistema'},
-        products=[{'product':draft.product,'quantity':str(draft.quantity_liters),'unit':'L','price_basis':'1.000 L','unit_price':str(draft.price_per_thousand),'total':str(gross)}],
+        products=[{'product':draft.product,'quantity':str(draft.quantity_liters),'unit':'L','price_basis':'1.000 L','unit_price':str(draft.price_per_thousand),'total':str(gross),
+            'asset_kind':draft.asset_kind,'object_count':draft.object_count,'presentation':presentation}],
         gross=str(gross),deductions=deductions,withheld=str(withheld),net=str(net),
         policy=name+' · regra do jogo aplicada a todos os produtos' if taxed else ('Histórico: pagamento bruto já realizado; sem desconto retroativo' if legacy_cents is not None else 'Descontos desativados pela administração'),
         source=SOURCE if taxed else '',reference='Simulação econômica. Não é NF-e, não possui autorização SEFAZ. ICMS, IBS/CBS e tributos sobre lucro não são presumidos.')

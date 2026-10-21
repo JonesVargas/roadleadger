@@ -15,6 +15,7 @@ ACTIVE=('requested','accepted','receiving','received','paying','needs_review')
 def offer_data(offer,user):
     draft=offer.reservation.draft
     return dict(id=str(offer.pk),product=draft.product,quantity_liters=str(draft.quantity_liters),
+        asset_kind=draft.asset_kind,object_count=draft.object_count,
         price_per_thousand=str(draft.price_per_thousand),seller=draft.farm.name,
         own=draft.farm.user_id==user.pk,status=offer.status,stock_verified=True)
 
@@ -23,6 +24,7 @@ def purchase_data(order,user):
     from .invoices import quote,quote_id
     financial=order.financial_snapshot or quote(draft,order.buyer)
     return dict(id=str(order.pk),offer_id=str(order.offer_id),product=draft.product,
+        asset_kind=draft.asset_kind,object_count=draft.object_count,
         seller=draft.farm.name,buyer=order.buyer.name,role='seller' if draft.farm.user_id==user.pk else 'buyer',
         status=order.status,quantity_liters=str(order.quantity_liters),price_per_thousand=str(order.price_per_thousand),
         total=str(order.total),destination=order.destination.terminal_id,settlement_enabled=True,

@@ -113,6 +113,9 @@ class FarmProfile(models.Model):
 
 
 class MarketDraft(models.Model):
+    asset_kind=models.CharField(max_length=10,default='bulk',choices=[('bulk','Granel'),('objects','Fardos/paletes')])
+    object_data=models.TextField(blank=True)
+    object_count=models.PositiveSmallIntegerField(default=0)
     cancel_requested = models.BooleanField(default=False)
     """A saved intention. Never public stock, reservation or executed trade."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -148,6 +151,7 @@ class TradeBinding(models.Model):
 
 
 class ConnectorNode(models.Model):
+    objects_protocol=models.PositiveSmallIntegerField(default=0)
     fulfillment_protocol = models.PositiveSmallIntegerField(default=0)
     id = models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     binding = models.ForeignKey(TradeBinding,on_delete=models.PROTECT,null=True,related_name='connectors')

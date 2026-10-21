@@ -26,13 +26,16 @@ def settle(request,purchase_id):
         node=live_node(order.destination)
         if node is None:return error('connector_offline',409)
         if node.fulfillment_protocol<2:return error('fulfillment_update_required',409)
+        original=order.offer.reservation.draft
+        if original.asset_kind=='objects' and node.objects_protocol!=1:return error('objects_update_required',409)
         financial=order.financial_snapshot or quote(order.offer.reservation.draft,order.buyer)
         if not financial or request.data.get('financial_ack')!=quote_id(financial):return error('quote_changed',409)
         if MarketCommand.objects.filter(node=node,status='pending').exists():return error('trade_busy',409)
         if order.delivery_id is None:
             draft=MarketDraft.objects.create(farm=order.buyer,request_key=uuid.uuid4(),terminal_id=order.destination.terminal_id,
                 game_session=node.game_session,product=order.offer.reservation.draft.product,quantity_liters=order.quantity_liters,
-                price_per_thousand=order.price_per_thousand,observed_liters=order.quantity_liters)
+                price_per_thousand=order.price_per_thousand,observed_liters=order.quantity_liters,
+                asset_kind=original.asset_kind,object_data=original.object_data,object_count=original.object_count)
             order.delivery=MarketReservation.objects.create(draft=draft,binding=order.destination)
         cents=int(Decimal(financial['gross'])*100)
         if not 1<=cents<=1000000000000:return error('invalid_fulfillment_amount',409)
@@ -49,6 +52,7 @@ def next_payment(node):
         offer__reservation__binding=node.binding,status='received').first()
     if order is None:return None
     reservation=order.offer.reservation
+    if reservation.draft.asset_kind=='objects' and node.objects_protocol!=1:return None
     command=MarketCommand.objects.create(reservation=reservation,node=node,kind='fulfill',expected_revision=node.observed_revision,
         amount_cents=int(Decimal(order.financial_snapshot['net'])*100),game_session=node.game_session,financial_snapshot=order.financial_snapshot)
     reservation.status='fulfill_requested';reservation.save(update_fields=['status'])
