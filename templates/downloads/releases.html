@@ -1,0 +1,18 @@
+{% for version in versions %}
+<article class="release">
+  <div style="min-width:0">
+    <span class="badge">{{ version.get_channel_display }}</span>
+    <h2>{{ version.get_application_display }} · {{ version.version }}</h2>
+    {% if version.application == 'tabletbridge' %}
+      {% if version.platform == 'windows' %}<p><strong>Windows — Connector + Panel</strong><br>Instala os dois apps. O Connector prepara os mods do FS25 automaticamente. O instalador oferece atalhos na Área de Trabalho.</p>
+      {% else %}<p><strong>Android — Panel</strong><br>Instale o APK no tablet ou celular. Use a mesma rede Wi-Fi do PC e o IP e a porta exibidos no Connector.</p>{% endif %}
+    {% endif %}
+    <p>{{ version.release_notes|linebreaksbr }}</p>
+    <small>{{ version.file_size|filesizeformat }}{% if version.published_at %} · {{ version.published_at|date:'d/m/Y' }}{% endif %}</small>
+    <small style="display:block;overflow-wrap:anywhere">SHA-256: <code>{{ version.sha256|default:'calculado na publicação' }}</code></small>
+  </div>
+  <a class="button" href="{% url 'downloads:file' version.pk %}">{% if version.application == 'tabletbridge' %}Baixar para {{ version.get_platform_display }}{% else %}Baixar{% endif %}</a>
+</article>
+{% empty %}
+<div class="panel"><h2>Em preparação</h2><p>Nenhuma versão compatível foi publicada ainda.</p></div>
+{% endfor %}

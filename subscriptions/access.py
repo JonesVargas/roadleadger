@@ -19,6 +19,9 @@ def allowed_apps(user):
     return tuple(app for app in APP_LABELS if app in apps)
 
 def can_download(user, version):
+    if version.application == 'tabletbridge':
+        from tabletbridge_access.service import decision
+        return bool(user.is_authenticated and decision(user)[0]=='authorized')
     if version.application not in allowed_apps(user):
         return False
     if user.lifetime_access:

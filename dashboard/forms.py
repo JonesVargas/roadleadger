@@ -90,13 +90,14 @@ class AppVersionForm(AdminModelForm):
     plan_codes = forms.CharField(
         label="Planos com acesso",
         required=False,
-        help_text="Restrição adicional opcional: códigos separados por vírgula. Vazio libera aos planos que incluem o aplicativo selecionado.",
+        help_text="RoadLedger: restrição opcional por códigos de planos. TabletBridge: deixe vazio; o acesso usa a liberação administrativa do player.",
     )
 
     class Meta:
         model = AppVersion
-        fields = ("application", "version", "channel", "file", "release_notes", "published")
-        labels = {"version": "Versão", "channel": "Canal", "file": "Instalador", "release_notes": "Notas da versão", "published": "Disponível para download"}
+        fields = ("application", "platform", "version", "channel", "file", "release_notes", "published")
+        labels = {"version": "Versão", "channel": "Canal", "file": "Instalador ou APK", "release_notes": "Notas da versão", "published": "Disponível para download"}
+        help_texts = {"platform":"Para RoadLedger, mantenha Windows. No TabletBridge, escolha Windows ou Android.","file":"TabletBridge: instalador Windows ou APK Android, até 300 MB."}
         widgets = {"release_notes": forms.Textarea(attrs={"rows": 4})}
 
     def __init__(self, *args, **kwargs):
@@ -104,6 +105,12 @@ class AppVersionForm(AdminModelForm):
         if self.instance.pk:
             self.fields["file"].required = False
             self.fields["plan_codes"].initial = ", ".join(self.instance.min_plan_codes)
+
+    def clean(self):
+        cleaned=super().clean()
+        if cleaned.get('application')=='tabletbridge' and cleaned.get('plan_codes','').strip():
+            self.add_error('plan_codes','TabletBridge usa a liberação administrativa. Deixe os planos em branco.')
+        return cleaned
 
     def save(self, commit=True):
         item = super().save(commit=False)

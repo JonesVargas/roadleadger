@@ -5,13 +5,15 @@ from django_ratelimit.decorators import ratelimit
 
 from .models import AppVersion, DownloadEvent
 from subscriptions.access import can_download, allowed_apps
+from tabletbridge_access.service import decision
+from .access import visible_versions
 
 
 @login_required
 def index(request):
-    if not allowed_apps(request.user):
+    if not allowed_apps(request.user) and decision(request.user)[0]!='authorized':
         return HttpResponseForbidden("Uma assinatura ativa ou acesso vitalício é necessário.")
-    return render(request, "downloads/index.html", {"versions": [v for v in AppVersion.objects.filter(published=True) if can_download(request.user, v)]})
+    return render(request, "downloads/index.html", {"versions": visible_versions(request.user)})
 
 
 @login_required
@@ -27,7 +29,7 @@ def download(request, pk):
         allowed=allowed,
     )
     if not allowed:
-        return HttpResponseForbidden("Uma assinatura ativa compatível é necessária.")
+        return HttpResponseForbidden("Seu acesso a este aplicativo não está liberado ou expirou.")
     return FileResponse(
         version.file.open("rb"), as_attachment=True, filename=version.file.name.rsplit("/", 1)[-1]
     )

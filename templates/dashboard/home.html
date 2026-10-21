@@ -3,7 +3,7 @@
 {% block content %}
 <section class="page-head dashboard-head"><div><span class="eyebrow">Área do cliente</span><h1>Olá, {{ user.full_name }}.</h1></div><a class="button ghost" href="{% url 'accounts:profile' %}">Editar perfil</a></section>
 <a class="button ghost small" href="{% url 'sync-center' %}">Atualizações dos aplicativos</a>
-{% if tabletbridge_allowed %}<a class="button ghost small" href="{% url 'tabletbridge-demands' %}">Cooperativa RoadLedger</a>{% endif %}
+{% if tabletbridge_allowed %}<a class="button ghost small" href="{% url 'tabletbridge-demands' %}">Cooperativa RoadLedger</a><a class="button ghost small" href="?section=downloads">Downloads TabletBridge</a>{% endif %}
 {% if section == 'conta' %}
 <section class="section dashboard-grid">
   <article class="panel span2"><h2>Seu acesso</h2>
@@ -16,7 +16,7 @@
   <article class="panel"><h2>Token de integração</h2><p>Use apenas se o aplicativo solicitar.</p><form method="post" action="{% url 'licenses:create_token' %}">{% csrf_token %}<button class="button ghost small">Gerar token</button></form></article>
   <article class="panel span2"><h2>Dispositivos</h2>{% for device in devices %}<div class="list-row"><div><strong>{{ device.name }}</strong><small>{{ device.platform }} · visto {{ device.last_seen_at|date:'d/m/Y H:i' }}</small></div><form method="post" action="{% url 'licenses:revoke_device' device.pk %}">{% csrf_token %}<button class="link-btn danger-text">Revogar</button></form></div>{% empty %}<p>Nenhum dispositivo autorizado.</p>{% endfor %}</article>
   <article class="panel"><span class="eyebrow">Financeiro</span><h2>Pagamentos</h2><p>Acompanhe sua assinatura, próxima renovação e histórico de cobranças.</p><a class="button ghost small" href="?section=pagamentos">Ver pagamentos</a></article>
-  {% if has_subscription %}<article class="panel"><span class="eyebrow">Aplicativo</span><h2>Downloads</h2>{% if can_download %}<p>Seu acesso está liberado. Baixe a versão compatível com seu plano.</p><a class="button small" href="?section=downloads">Ver downloads</a>{% else %}<p>Os arquivos serão liberados assim que o pagamento for confirmado.</p><a class="button ghost small" href="?section=downloads">Acompanhar liberação</a>{% endif %}</article>{% endif %}
+  {% if show_downloads %}<article class="panel"><span class="eyebrow">Aplicativo</span><h2>Downloads</h2>{% if can_download %}<p>Seu acesso está liberado. Baixe a versão compatível com seu plano.</p><a class="button small" href="?section=downloads">Ver downloads</a>{% else %}<p>Os arquivos serão liberados assim que o pagamento for confirmado.</p><a class="button ghost small" href="?section=downloads">Acompanhar liberação</a>{% endif %}</article>{% endif %}
   <article class="panel"><h2>Minha empresa</h2>
   {% if company_license.status == 'active' %}<p>Licença de proprietário concedida à sua conta. O uso depende da assinatura ativa.</p>
   {% elif company_license.status == 'revoked' %}<p>Licença revogada. Os dados da empresa foram preservados.</p>
@@ -38,10 +38,10 @@
   </article>
   <div class="panel table-panel"><h2>Histórico de pagamentos</h2>{% for payment in payments %}<div class="list-row"><span><strong>R$ {{ payment.amount }}</strong><small>{% if payment.paid_at %}{{ payment.paid_at|date:'d/m/Y H:i' }}{% else %}{{ payment.created_at|date:'d/m/Y H:i' }}{% endif %}</small></span><span class="status {{ payment.status }}">{{ payment.status }}</span></div>{% empty %}<p>Nenhum pagamento confirmado até agora.</p>{% endfor %}</div>
 </section>
-{% elif section == 'downloads' and has_subscription %}
+{% elif section == 'downloads' and show_downloads %}
 <section class="section client-section">
-  <div class="admin-title"><div><span class="eyebrow">Aplicativo</span><h2>Downloads do RoadLedger</h2><p>Baixe somente arquivos publicados oficialmente para o seu plano.</p></div><a class="button ghost" href="?section=conta">Voltar à minha conta</a></div>
-  {% if can_download %}{% for version in versions %}<article class="release"><div><span class="badge">{{ version.get_channel_display }}</span><h2>{{ version.get_application_display }} · {{ version.version }}</h2><p>{{ version.release_notes|linebreaksbr }}</p><small>SHA-256: <code>{{ version.sha256|default:'calculado na publicação' }}</code></small></div><a class="button" href="{% url 'downloads:file' version.pk %}">Baixar</a></article>{% empty %}<div class="panel"><h2>Em preparação</h2><p>Nenhuma versão compatível foi publicada ainda.</p></div>{% endfor %}{% else %}<div class="panel"><span class="status {{ subscription.status }}">{{ subscription.get_status_display }}</span><h2>Download aguardando pagamento</h2><p>Assim que o Mercado Pago confirmar a assinatura, os arquivos serão liberados automaticamente nesta aba.</p><a class="button ghost" href="?section=pagamentos">Acompanhar pagamento</a></div>{% endif %}
+  <div class="admin-title"><div><span class="eyebrow">Aplicativo</span><h2>Downloads da sua conta</h2><p>RoadLedger conforme seu plano; TabletBridge conforme sua liberação administrativa.</p></div><a class="button ghost" href="?section=conta">Voltar à minha conta</a></div>
+  {% if can_download %}{% include 'downloads/releases.html' %}{% else %}<div class="panel"><span class="status {{ subscription.status }}">{{ subscription.get_status_display }}</span><h2>Download aguardando pagamento</h2><p>Assim que o Mercado Pago confirmar a assinatura, os arquivos serão liberados automaticamente nesta aba.</p><a class="button ghost" href="?section=pagamentos">Acompanhar pagamento</a></div>{% endif %}
 </section>
 {% endif %}
 {% endblock %}

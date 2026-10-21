@@ -40,16 +40,15 @@ def home(request):
     if section not in {"conta", "pagamentos", "downloads"}:
         section = "conta"
     has_subscription = bool(sub) or request.user.lifetime_access or request.user.has_manual_access
-    can_download = bool(allowed_apps(request.user))
+    tabletbridge_allowed=tabletbridge_decision(request.user)[0]=='authorized'
+    can_download = bool(allowed_apps(request.user)) or tabletbridge_allowed
     versions = []
     if can_download:
-        versions = [
-            version
-            for version in AppVersion.objects.filter(published=True)
-            if version_allowed(request.user, version)
-        ][:10]
+        from downloads.access import visible_versions
+        versions=visible_versions(request.user,road_limit=10)
     return render(request, "dashboard/home.html", {
-        "tabletbridge_allowed": tabletbridge_decision(request.user)[0] == "authorized",
+        "tabletbridge_allowed": tabletbridge_allowed,
+        "show_downloads":has_subscription or tabletbridge_allowed,
         "company_backup": CompanyCloudBackup.objects.filter(owner=request.user, company__legacy=False).select_related("company").defer("content").first(),
         "owned_companies": VirtualCompany.objects.filter(owner=request.user, legacy=False),
         "company_license": CompanyOwnershipLicense.objects.filter(user=request.user).first(),
