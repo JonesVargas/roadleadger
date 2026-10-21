@@ -79,7 +79,8 @@ def state(request):
         if candidate is not None:
             recovery={'command':command_data(candidate),'reason':candidate.receipt.get('receipt',{}).get('code')}
     return Response({'node_id':str(node.pk),'approved':node.approved_at is not None,
-        'terminal_id':node.terminal_id,'blocked':bool(node.binding and node.binding.blocked),'recovery':recovery})
+        'terminal_id':node.terminal_id,'blocked':bool(node.binding and node.binding.blocked),'recovery':recovery,
+        'objects_trading_enabled':True,'saved_payment_witness':True})
 
 
 @endpoint('POST')

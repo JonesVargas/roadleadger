@@ -46,7 +46,7 @@ def capabilities():
     rate=policy.previdencia+policy.rat+policy.senar if policy else (Decimal('0') if RuralTaxPolicy.objects.exists() else Decimal('2.23'))
     return {'commerce_enabled':False,'cooperative_fulfillment_enabled':True,'offers_enabled':True,'purchase_requests_enabled':True,'drafts_enabled':True,'reservations_enabled':True,'settlement_enabled':False,
         'fees':{'sales_tax_percent':str(rate),'monthly_property_fee':'25.00','currency':'game'},
-        'bulk_settlement_enabled':True,'offers':[], 'message':'Comércio a granel disponível com mods atualizados. Salve após receber carga ou pagamento.'}
+        'bulk_settlement_enabled':True,'objects_trading_enabled':True,'saved_payment_witness':True,'offers':[], 'message':'Comércio a granel, fardos e paletes com mods atualizados. Salve após receber carga ou pagamento.'}
 
 
 @endpoint('GET')
