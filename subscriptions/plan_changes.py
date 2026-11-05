@@ -3,6 +3,8 @@ import calendar
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import urlparse
+from payments.availability import billing_operation
+
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -47,6 +49,7 @@ def quote(sub, target, at=None):
     used=min(sub.credit_balance,max(delta,ZERO))
     return {"difference":delta,"credit_used":used,"amount_due":max(delta-used,ZERO),"credit_added":max(-delta,ZERO),"period_end":sub.current_period_end}
 
+@billing_operation
 def configure_renewal(sub, target, balance, client):
     periods=list(coverage(sub))
     end=sub.current_period_end
@@ -64,6 +67,7 @@ def configure_renewal(sub, target, balance, client):
         raise ValueError("A assinatura ainda não possui uma cobrança vinculada ao Mercado Pago.")
     return dict(credit_balance=balance,renewal_credit=reserved,renewal_amount=amount,billing_coverage=periods,current_period_end=end)
 
+@billing_operation
 def finish(change_id, client=None):
     from payments.services import MercadoPagoClient
     client=client or MercadoPagoClient()
@@ -107,6 +111,7 @@ def finish(change_id, client=None):
         SubscriptionHistory.objects.create(subscription=sub,old_status=sub.status,new_status=sub.status,source="plan_change",payload={"change":str(change.pk),"from":change.previous_plan_id,"to":target.pk,"difference":str(change.difference),"credit":str(sub.credit_balance)})
         return change
 
+@billing_operation
 def request_change(user,target_id,client=None,expected_amount=None):
     from payments.services import MercadoPagoClient
     client=client or MercadoPagoClient()
@@ -140,6 +145,7 @@ def request_change(user,target_id,client=None,expected_amount=None):
     return change
 
 @transaction.atomic
+@billing_operation
 def change_payment(payload,client=None):
     from payments.models import Payment
     ident=(payload.get("metadata") or {}).get("plan_change_id")
@@ -167,6 +173,7 @@ def change_payment(payload,client=None):
     return sub
 
 
+@billing_operation
 def recurring_renewal(sub, payload, client=None):
     from payments.services import MercadoPagoClient
     client=client or MercadoPagoClient()
@@ -182,6 +189,7 @@ def recurring_renewal(sub, payload, client=None):
     return sub
 
 
+@billing_operation
 def cancel_change(user, change_id):
     with transaction.atomic():
         change=PlanChange.objects.select_for_update().get(pk=change_id,subscription__user=user)
@@ -189,6 +197,7 @@ def cancel_change(user, change_id):
         change.status="cancelled";change.save(update_fields=["status"])
 
 
+@billing_operation
 def renew_pix(user, client=None):
     from payments.services import MercadoPagoClient
     client=client or MercadoPagoClient()

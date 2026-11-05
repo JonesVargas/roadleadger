@@ -1,6 +1,6 @@
 # RoadLedger Site
 
-Site Django independente para divulgação, assinaturas, pagamentos, downloads e licenciamento do RoadLedger desktop.
+Site Django para divulgação, liberação de acesso, downloads e licenciamento do RoadLedger e do TabletBridge.
 
 ## Desenvolvimento local (Windows)
 
@@ -12,27 +12,27 @@ Site Django independente para divulgação, assinaturas, pagamentos, downloads e
 6. Crie o administrador: `python manage.py createsuperuser`.
 7. Inicie: `python manage.py runserver`.
 
-## Mercado Pago (sandbox)
+## Liberação de aplicativos
 
-Defina `PAYMENT_CREDENTIALS_KEY` no servidor e mantenha essa chave estável. Depois, cadastre as credenciais de teste e produção em **Central administrativa > Pagamentos** e ative somente o ambiente desejado. Variáveis `MP_*` continuam disponíveis como fallback. O navegador nunca ativa uma assinatura: o webhook é autenticado, o recurso é consultado novamente na API oficial e o evento é idempotente. Os testes usam respostas simuladas; nenhuma credencial real integra o repositório.
+Use **Gestão → Versões** para publicar arquivos e **Gestão → Acessos de usuários** para liberar as contas. O modo padrão dispensa credenciais do Mercado Pago. O histórico comercial permanece no banco. Consulte o [procedimento de implantação e reversão](docs/ACESSO_MANUAL_DEPLOY.md).
 
 ## Arquivos e segurança
 
-Instaladores ficam no storage configurado. No primeiro deploy do Railway, monte um Volume em `/data` e defina `MEDIA_ROOT=/data/media`; isso evita perder os arquivos enviados a cada nova versão. Para escalar para várias réplicas, use `DOWNLOAD_STORAGE=s3` com um bucket S3 compatível privado. Cada versão calcula SHA-256, downloads exigem plano compatível, possuem limite por usuário e geram auditoria.
+Instaladores ficam no armazenamento privado configurado. No Railway, monte um volume em `/data` e defina `MEDIA_ROOT=/data/media` para preservar os arquivos entre publicações. Para escalar para várias réplicas, use `DOWNLOAD_STORAGE=s3` com um bucket compatível privado. Os downloads exigem liberação, possuem limite por usuário e geram auditoria.
 
-## Railway (preparado, não publicado)
+## Railway
 
 1. Crie um projeto a partir deste repositório GitHub e adicione um serviço PostgreSQL. O Railway detectará o `Dockerfile` automaticamente.
 2. No serviço web, referencie `DATABASE_URL` com `${{Postgres.DATABASE_URL}}`.
 3. Copie as variáveis de `.env.production.example` para o serviço e substitua os valores de exemplo.
 4. Monte um Volume em `/data` e mantenha `DOWNLOAD_STORAGE=local` e `MEDIA_ROOT=/data/media`.
-5. Gere um domínio Railway provisório; atualize `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `SITE_URL` e `MP_WEBHOOK_URL` com esse endereço.
+5. Configure o domínio e atualize `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` e `SITE_URL` com esse endereço.
 6. Configure o healthcheck do serviço como `/api/v1/health/`, com timeout de 300 segundos.
 7. Após o primeiro deploy, execute `python manage.py createsuperuser` uma única vez pelo terminal do serviço.
 
-O `Dockerfile` coleta os arquivos estáticos na construção e, ao iniciar, executa somente as migrações antes de subir o Gunicorn. O comando `seed_roadledger` deve ser executado manualmente apenas na primeira instalação; deploys posteriores nunca sobrescrevem planos, recursos ou textos administrados no site. O `railway.json` permanece como referência para serviços legados. O deploy não foi executado.
+O fluxo executa a coleta de arquivos estáticos e as migrações antes de servir a aplicação pelo Gunicorn. Execute `seed_roadledger` manualmente apenas na primeira instalação. Em uma instância existente, siga o [procedimento de implantação](docs/ACESSO_MANUAL_DEPLOY.md) antes de enviar mudanças à branch de produção.
 
-Use `.env.production.example` como checklist. Gere valores longos e independentes para `SECRET_KEY` e `PAYMENT_CREDENTIALS_KEY`; não troque a segunda depois de cadastrar credenciais, pois ela é necessária para descriptografá-las. Antes da venda: configure SMTP real, credenciais do Mercado Pago, domínio/HTTPS, backups e revisão jurídica. Comece com HSTS de 3600 segundos e aumente somente depois de confirmar que domínio e subdomínios funcionam integralmente por HTTPS.
+Use `.env.production.example` para configurar HTTPS, e-mail e persistência. Guarde a chave `PAYMENT_CREDENTIALS_KEY` anterior se houver credenciais históricas criptografadas para uma futura reativação.
 
 ## API desktop
 
@@ -43,7 +43,7 @@ Use `.env.production.example` como checklist. Gere valores longos e independente
 
 ## Testes
 
-`python manage.py test` e `ruff check . --exclude migrations,.venv`.
+Veja os [comandos de teste](docs/ACESSO_MANUAL_DEPLOY.md#testes-locais) do modo manual e da regressão do fluxo anterior.
 
 ## Conteúdo jurídico
 

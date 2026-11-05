@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="page-head"><span class="eyebrow">Downloads</span><h1>Aplicativos liberados para sua conta.</h1><p>Baixe os arquivos oficiais do RoadLedger e do TabletBridge conforme seu acesso. Os downloads ficam registrados.</p></section>
-<section class="section narrow">{% include 'downloads/releases.html' %}</section>
+<section class="section narrow">{% if manual_app_access %}{% include 'downloads/app_access.html' %}{% endif %}{% include 'downloads/releases.html' %}</section>
 {% endblock %}

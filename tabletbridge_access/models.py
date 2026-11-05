@@ -11,6 +11,7 @@ class AccessGrant(models.Model):
     blocked = models.BooleanField('Bloqueado', default=False)
     expires_at = models.DateTimeField('Validade (vazio = sem vencimento)', null=True, blank=True)
     block_reason = models.CharField('Motivo interno do bloqueio', max_length=240, blank=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

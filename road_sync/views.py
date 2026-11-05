@@ -8,18 +8,18 @@ from .models import ClientCursor, OutboxEvent
 from .service import feed, receive
 
 
-@endpoint(["POST"])
+@endpoint(["POST"], manual_apps=("player", "company"))
 def push(request):
     return Response(receive(request.user, request.data))
 
 
-@endpoint(["GET"])
+@endpoint(["GET"], manual_apps=("player", "company"))
 def pull(request):
     cursor = serializers.IntegerField(min_value=0).run_validation(request.query_params.get("cursor", 0))
     return Response(feed(request.user, cursor))
 
 
-@endpoint(["POST"])
+@endpoint(["POST"], manual_apps=("player", "company"))
 def acknowledge(request):
     installation = serializers.UUIDField().run_validation(request.data.get("installation_id"))
     cursor = serializers.IntegerField(min_value=0).run_validation(request.data.get("cursor"))

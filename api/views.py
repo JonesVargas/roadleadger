@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 from datetime import timedelta
+from django.conf import settings
 
 from django.utils import timezone
 from rest_framework.decorators import (
@@ -13,8 +14,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
-from downloads.models import AppVersion
-from subscriptions.access import APP_LABELS, allowed_apps, can_download
+from downloads.access import published_versions
+from subscriptions.access import APP_LABELS, allowed_apps, can_download, live_grants
 from licenses.models import ApiToken, Device, DeviceCode
 
 from .authentication import HashedTokenAuthentication
@@ -48,11 +49,29 @@ def active_sub(user):
 @authentication_classes([HashedTokenAuthentication])
 @permission_classes([IsAuthenticated])
 def entitlements(request):
-    sub = active_sub(request.user)
     apps = allowed_apps(request.user)
     application = request.GET.get("app")
     if application is not None and application not in APP_LABELS:
         return Response({"detail": "Aplicativo inválido."}, status=400)
+    if settings.MANUAL_APP_ACCESS:
+        grants = list(live_grants(request.user).filter(application__in=apps))
+        selected = [grant for grant in grants if not application or grant.application == application]
+        lifetime = any(grant.plan_code == "lifetime" for grant in selected)
+        product = ("company" if "company" in apps else "player") if selected else None
+        expiry = max(grant.expires_at for grant in selected) if selected and all(grant.expires_at for grant in selected) else None
+        plan = next((grant.plan_code for grant in selected if grant.plan_code), None)
+        features = []
+        for grant in selected:
+            for feature in grant.features:
+                if feature not in features:
+                    features.append(feature)
+        return Response({
+            "active": bool(selected), "apps": list(apps), "lifetime": lifetime,
+            "plan": "lifetime" if lifetime else (plan or ("manual-" + product if product else None)),
+            "manual_access": bool(selected), "manual_plan": product,
+            "manual_expires_at": expiry, "features": features,
+        })
+    sub = active_sub(request.user)
     return Response(
         {
             "active": application in apps if application else bool(apps),
@@ -71,15 +90,14 @@ def entitlements(request):
 @authentication_classes([HashedTokenAuthentication])
 @permission_classes([IsAuthenticated])
 def latest_version(request):
-    sub = active_sub(request.user)
     if not allowed_apps(request.user):
-        return Response({"detail": "Assinatura ativa necessária."}, status=403)
+        return Response({"detail": "Acesso ao aplicativo não liberado."}, status=403)
     application = request.GET.get("app", "offline")
     if application not in APP_LABELS:
         return Response({"detail": "Aplicativo inválido."}, status=400)
     if application not in allowed_apps(request.user):
-        return Response({"detail": "Seu plano não inclui este aplicativo."}, status=403)
-    version = next((v for v in AppVersion.objects.filter(published=True, application=application, channel=request.GET.get("channel", "stable")) if can_download(request.user, v)), None)
+        return Response({"detail": "Acesso ao aplicativo não liberado."}, status=403)
+    version = next((v for v in published_versions().filter(application=application, channel=request.GET.get("channel", "stable")) if can_download(request.user, v)), None)
     if not version:
         return Response({"detail": "Nenhuma versão publicada."}, status=404)
     return Response(

@@ -1,0 +1,8 @@
+<div class="grid">
+{% for item in app_access %}
+<article class="panel"><h3>{{ item.app.name }}</h3>
+{% if item.app.description %}<p>{{ item.app.description|linebreaksbr }}</p>{% endif %}
+{% if item.allowed %}<p>Acesso liberado.</p>{% else %}<p>A liberação deste aplicativo é feita pela administração.</p>{% endif %}
+</article>
+{% endfor %}
+</div>

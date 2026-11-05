@@ -24,9 +24,10 @@ class AccessGrantAdmin(admin.ModelAdmin):
     list_filter = ('approved', 'blocked')
     search_fields = ('user__email', 'user__full_name')
     autocomplete_fields = ('user',)
-    readonly_fields = ('updated_at',)
+    readonly_fields = ('updated_at', 'updated_by')
 
     def save_model(self, request, obj, form, change):
+        obj.updated_by = request.user
         super().save_model(request, obj, form, change)
         AuditEvent.objects.create(actor=request.user, action='tabletbridge.access.changed', target=str(obj.user_id),
             metadata={'approved': obj.approved, 'blocked': obj.blocked,

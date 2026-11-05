@@ -1,5 +1,6 @@
 from functools import wraps
 from uuid import uuid4, uuid5, NAMESPACE_URL
+from django.conf import settings
 from subscriptions.access import allowed_apps
 from .company_access import can_own_company, has_company_permission, player_access
 from .company_identity import fictitious_cnpj
@@ -19,14 +20,15 @@ from .models import VirtualCompany, Vacancy, Candidacy, EmployeeContract, Freigh
 DEFAULT_RULES = {"damage_limit": 5, "damage_discount_percent": 10, "speed_limit": 90, "speed_reputation_loss": 5, "fine_reputation_loss": 5, "fine_license_points": 7}
 
 
-def endpoint(methods, app=None, owner=False):
+def endpoint(methods, app=None, owner=False, manual_apps=()):
     def wrap(func):
         @wraps(func)
         def authorized(request, *args, **kwargs):
-            if app and app not in allowed_apps(request.user):
-                return Response({"detail": "Assinatura ativa do RoadLedger Player necessária."}, status=403)
+            required_apps = manual_apps if settings.MANUAL_APP_ACCESS and manual_apps else ((app,) if app else ())
+            if required_apps and not set(required_apps).intersection(allowed_apps(request.user)):
+                return Response({"detail": "Acesso ao aplicativo RoadLedger necessário."}, status=403)
             if owner and not can_own_company(request.user):
-                return Response({"detail": "Licença de proprietário e assinatura ativa necessárias."}, status=403)
+                return Response({"detail": "Licença de proprietário e acesso ao RoadLedger necessários."}, status=403)
             return func(request, *args, **kwargs)
         return api_view(methods)(authentication_classes([HashedTokenAuthentication])(permission_classes([IsAuthenticated])(authorized)))
     return wrap

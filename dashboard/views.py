@@ -1,4 +1,7 @@
+from django.conf import settings
+from django.http import Http404
 from django.contrib import messages
+from payments.availability import billing_view
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db.models import Sum, Q
 from django.db import transaction
@@ -12,6 +15,7 @@ from tabletbridge_access.service import decision as tabletbridge_decision
 from audit.models import AuditEvent
 from core.models import FAQ, Feature, LegalPage, ServiceStatus, SocialLink, UpdatePost
 from downloads.models import AppVersion, DownloadEvent
+from downloads.access import offered_version_ids
 from subscriptions.access import can_download as version_allowed, allowed_apps
 from payments.models import Payment, PaymentProviderConfig
 from subscriptions.models import Plan, Subscription
@@ -37,6 +41,8 @@ def home(request):
         return redirect("dashboard:manager")
     sub = request.user.subscriptions.select_related("plan").order_by("-created_at").first()
     section = request.GET.get("section", "conta")
+    if settings.MANUAL_APP_ACCESS and section == "pagamentos":
+        section = "conta"
     if section not in {"conta", "pagamentos", "downloads"}:
         section = "conta"
     has_subscription = bool(sub) or request.user.lifetime_access or request.user.has_manual_access
@@ -46,9 +52,11 @@ def home(request):
     if can_download:
         from downloads.access import visible_versions
         versions=visible_versions(request.user,road_limit=10)
+    from downloads.access import application_access
     return render(request, "dashboard/home.html", {
+        "app_access": application_access(request.user) if settings.MANUAL_APP_ACCESS else [],
         "tabletbridge_allowed": tabletbridge_allowed,
-        "show_downloads":has_subscription or tabletbridge_allowed,
+        "show_downloads": settings.MANUAL_APP_ACCESS or has_subscription or tabletbridge_allowed,
         "company_backup": CompanyCloudBackup.objects.filter(owner=request.user, company__legacy=False).select_related("company").defer("content").first(),
         "owned_companies": VirtualCompany.objects.filter(owner=request.user, legacy=False),
         "company_license": CompanyOwnershipLicense.objects.filter(user=request.user).first(),
@@ -90,6 +98,8 @@ def _manager_url(section="visao-geral"):
 @superuser_required
 def manager(request, bound_form=None, bound_entity=None):
     entity, edit_id = request.GET.get("edit"), request.GET.get("id")
+    if settings.MANUAL_APP_ACCESS and (entity == "plan" or request.GET.get("section") in {"planos", "pagamentos"}):
+        raise Http404
     edit_object = get_object_or_404(MANAGED[entity][0], pk=edit_id) if entity in MANAGED and edit_id else None
     forms = {key: form_class(instance=edit_object if entity == key else None, prefix=key) for key, (_model, form_class, _section) in MANAGED.items()}
     if bound_form is not None:
@@ -129,6 +139,7 @@ def manager(request, bound_form=None, bound_entity=None):
         "revenue": Payment.objects.filter(status__in=["approved", "authorized", "paid"]).aggregate(total=Sum("amount"))["total"] or 0,
         "recent_audit": AuditEvent.objects.select_related("actor")[:12],
         "versions": AppVersion.objects.all(), "plans": Plan.objects.all(), "features": Feature.objects.all(),
+        "offered_versions": offered_version_ids(),
         "faqs": FAQ.objects.all(), "updates": UpdatePost.objects.all(), "services": ServiceStatus.objects.all(),
         "social_links": SocialLink.objects.all(), "legal_pages": LegalPage.objects.all(),
         "customers": customers[:100],
@@ -187,6 +198,7 @@ def manager_support_status(request, ticket_id):
 
 
 @superuser_required
+@billing_view
 def manager_payment_config(request, environment):
     valid_environments = {value for value, _label in PaymentProviderConfig.ENVIRONMENTS}
     if request.method != "POST" or environment not in valid_environments:
@@ -212,6 +224,8 @@ def manager_payment_config(request, environment):
 
 @superuser_required
 def manager_save(request, entity):
+    if settings.MANUAL_APP_ACCESS and entity == "plan":
+        raise Http404
     if request.method != "POST" or entity not in MANAGED:
         return redirect("dashboard:manager")
     model, form_class, section = MANAGED[entity]
@@ -234,6 +248,8 @@ def manager_save(request, entity):
 
 @superuser_required
 def manager_delete(request, entity, object_id):
+    if settings.MANUAL_APP_ACCESS and entity == "plan":
+        raise Http404
     if request.method == "POST" and entity in MANAGED:
         model, _form, section = MANAGED[entity]
         item = get_object_or_404(model, pk=object_id)
@@ -253,7 +269,7 @@ def manager_user_action(request, user_id):
     if request.method == "POST":
         customer = get_object_or_404(User, pk=user_id)
         action = request.POST.get("action")
-        if action == "lifetime":
+        if action == "lifetime" and not settings.MANUAL_APP_ACCESS:
             customer.lifetime_access = not customer.lifetime_access
             customer.save(update_fields=["lifetime_access"])
         elif action == "active" and customer != request.user:
@@ -267,6 +283,7 @@ def manager_user_action(request, user_id):
 
 
 @superuser_required
+@billing_view
 def manager_subscription_status(request, subscription_id):
     if request.method == "POST":
         subscription = get_object_or_404(Subscription, pk=subscription_id)
@@ -317,6 +334,7 @@ def manager_company_license(request, user_id):
 
 
 @superuser_required
+@billing_view
 def manager_manual_access(request, user_id):
     if request.method != "POST":
         return redirect(_manager_url("clientes"))

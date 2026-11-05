@@ -4,6 +4,8 @@ from datetime import timedelta
 from decimal import Decimal
 
 import requests
+from payments.availability import billing_operation
+
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -25,6 +27,7 @@ class MercadoPagoClient:
     def _headers(self):
         return {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
 
+    @billing_operation
     def create_subscription(self, subscription):
         if not self.token:
             raise RuntimeError("Configure o Access Token do Mercado Pago no painel administrativo.")
@@ -57,6 +60,7 @@ class MercadoPagoClient:
         response.raise_for_status()
         return response.json()
 
+    @billing_operation
     def cancel_subscription(self, resource_id):
         response = requests.put(
             f"{self.base}/preapproval/{resource_id}",
@@ -67,6 +71,7 @@ class MercadoPagoClient:
         response.raise_for_status()
         return response.json()
 
+    @billing_operation
     def create_pix_preference(self, subscription):
         if not self.token:
             raise RuntimeError("Configure o Access Token do Mercado Pago no painel administrativo.")
@@ -106,11 +111,13 @@ class MercadoPagoClient:
         response.raise_for_status()
         return response.json()
 
+    @billing_operation
     def update_subscription_amount(self, resource_id, plan, amount, next_date):
         response = requests.put(f"{self.base}/preapproval/{resource_id}", json={"reason":f"RoadLedger - {plan.name}", "auto_recurring":{"transaction_amount":float(amount),"currency_id":"BRL"}, "next_payment_date":next_date.isoformat()}, headers=self._headers(), timeout=20)
         response.raise_for_status()
         return response.json()
 
+    @billing_operation
     def create_plan_change_preference(self, change):
         title = "Renovação" if change.operation == "renewal" else "Diferença proporcional"
         payload = {"items":[{"id":str(change.pk),"title":f"{title} - {change.target_plan.name}","quantity":1,"currency_id":"BRL","unit_price":float(change.amount_due)}],"payer":{"email":change.subscription.user.email},"external_reference":f"roadledger-plan-change-{change.pk}","metadata":{"subscription_id":change.subscription_id,"plan_change_id":str(change.pk)},"expires":True,"expiration_date_to":change.expires_at.isoformat(),"back_urls":{key:f"{settings.SITE_URL}/planos/trocar/" for key in ["success","pending","failure"]},"notification_url":settings.MP_WEBHOOK_URL}
@@ -146,6 +153,7 @@ def valid_signature(request, data_id):
 
 
 @transaction.atomic
+@billing_operation
 def apply_provider_subscription(payload, source="webhook"):
     internal_id = payload.get("external_reference")
     sub = (
@@ -185,6 +193,7 @@ def _pix_subscription(payload):
 
 
 @transaction.atomic
+@billing_operation
 def apply_provider_payment(payload, source="webhook", client=None):
     metadata = payload.get("metadata") or {}
     if metadata.get("plan_change_id"):
@@ -244,6 +253,7 @@ def apply_provider_payment(payload, source="webhook", client=None):
     return sub
 
 
+@billing_operation
 def process_webhook(event, client=None):
     client = client or MercadoPagoClient()
     if event.topic == "subscription_authorized_payment":

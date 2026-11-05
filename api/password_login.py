@@ -4,6 +4,7 @@ import secrets
 from datetime import timedelta
 
 from django.contrib.auth import authenticate
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.decorators import api_view, authentication_classes, permission_classes, throttle_classes
@@ -12,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
 
 from licenses.models import ApiToken, Device
-from subscriptions.access import active_subscription, allowed_apps
+from subscriptions.access import active_subscription, allowed_apps, live_grants
 
 
 class PasswordLoginThrottle(SimpleRateThrottle):
@@ -27,6 +28,9 @@ def _offline_until(user):
     """Never grant more than seven days or beyond the current access period."""
     now = timezone.now()
     lease = now + timedelta(days=7)
+    if settings.MANUAL_APP_ACCESS:
+        grant = live_grants(user).filter(application="player").first()
+        return min(lease, grant.expires_at or lease) if grant else now
     if user.lifetime_access:
         return lease
     expiries = []

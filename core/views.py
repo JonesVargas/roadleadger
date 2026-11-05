@@ -19,7 +19,7 @@ def home(request):
             "driver_ranking": driver_ranking(),
             "hiring_companies": hiring_companies(),
             "features": Feature.objects.filter(active=True)[:6],
-            "plans": Plan.objects.filter(active=True),
+            "plans": [] if settings.MANUAL_APP_ACCESS else Plan.objects.filter(active=True),
             "updates": UpdatePost.objects.filter(active=True)[:3],
         },
     )
@@ -38,11 +38,17 @@ def updates(request):
 
 
 def faq(request):
-    return render(request, "core/faq.html", {"faqs": FAQ.objects.filter(active=True)})
+    faqs = FAQ.objects.filter(active=True)
+    if settings.MANUAL_APP_ACCESS:
+        faqs = faqs.exclude(question__in=("Preciso de assinatura ativa?", "O plano Fundador é limitado?"))
+    return render(request, "core/faq.html", {"faqs": faqs})
 
 
 def status(request):
-    return render(request, "core/status.html", {"services": ServiceStatus.objects.all()})
+    services = ServiceStatus.objects.all()
+    if settings.MANUAL_APP_ACCESS:
+        services = services.exclude(name__iexact="Pagamentos")
+    return render(request, "core/status.html", {"services": services})
 
 
 def legal(request, kind):

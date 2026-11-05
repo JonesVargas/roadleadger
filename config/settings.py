@@ -108,6 +108,7 @@ EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.console.
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="RoadLedger <no-reply@roadledger.local>")
 SITE_URL = env("SITE_URL", default="http://127.0.0.1:8000")
 MP_ENVIRONMENT = env("MP_ENVIRONMENT", default="sandbox")
+MANUAL_APP_ACCESS = env.bool("ROADLEDGER_MANUAL_APP_ACCESS", default=True)
 MP_PUBLIC_KEY = env("MP_PUBLIC_KEY", default="")
 MP_ACCESS_TOKEN = env("MP_ACCESS_TOKEN", default="")
 MP_CLIENT_ID = env("MP_CLIENT_ID", default="")

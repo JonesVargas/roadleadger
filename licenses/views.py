@@ -40,7 +40,7 @@ def approve_device(request):
     if request.method == "POST":
         has_access = bool(allowed_apps(request.user))
         if not has_access:
-            messages.error(request, "É necessária uma assinatura ativa ou liberação do administrador.")
+            messages.error(request, "A liberação deste aplicativo é feita pela administração.")
             return render(request, "licenses/activate.html", {"code": code_value})
         code = DeviceCode.objects.filter(
             user_code=code_value,

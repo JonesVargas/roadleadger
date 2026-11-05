@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Acessos de usuários · RoadLedger{% endblock %}
+{% block content %}
+<section class="page-head"><h1>Acessos de usuários</h1><p>O login dos usuários é o e-mail cadastrado.</p><a href="{% url 'dashboard:manager' %}">Voltar à gestão</a></section>
+<section class="section">
+  <form method="get" class="panel"><label>Buscar por nome ou e-mail<input name="q" value="{{ q }}"></label><button class="button">Buscar</button></form>
+  {% if form.errors %}<div class="panel" role="alert">{{ form.errors }}</div>{% endif %}
+  {% for row in rows %}
+  <article class="panel">
+    <h2>{{ row.user.full_name }}</h2><p>{{ row.user.email }}</p>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="user_id" value="{{ row.user.pk }}">
+      <input type="hidden" name="application" value="roadledger">
+      <button class="button ghost small" name="action" value="revoke">Revogar todas as edições RoadLedger</button>
+    </form>
+    {% for item in row.apps %}
+    <div class="admin-list">
+      <div><strong>{{ item.app.name }}</strong><p>{{ item.status }}</p>
+      {% if item.grant %}<small>Validade: {{ item.grant.expires_at|date:"d/m/Y H:i"|default:"Sem vencimento" }} · Alterado em {{ item.grant.updated_at|date:"d/m/Y H:i" }} por {{ item.grant.updated_by.email|default:"histórico anterior" }}</small>{% endif %}</div>
+      <form method="post">{% csrf_token %}
+        <input type="hidden" name="user_id" value="{{ row.user.pk }}">
+        <input type="hidden" name="application" value="{{ item.app.code }}">
+        <label>Validade opcional<input type="datetime-local" name="expires_at" value="{{ item.grant.expires_at|date:'Y-m-d\TH:i' }}"></label>
+        <button class="button small" name="action" value="grant">Liberar</button>
+        <button class="button ghost small" name="action" value="revoke">Revogar</button>
+      </form>
+    </div>
+    {% endfor %}
+  </article>
+  {% empty %}<p>Nenhum usuário encontrado.</p>{% endfor %}
+  {% if page.has_previous %}<a href="?q={{ q|urlencode }}&amp;page={{ page.previous_page_number }}">Anterior</a>{% endif %}
+  {% if page.has_next %}<a href="?q={{ q|urlencode }}&amp;page={{ page.next_page_number }}">Próxima</a>{% endif %}
+</section>
+{% endblock %}

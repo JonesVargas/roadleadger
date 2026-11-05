@@ -1,11 +1,14 @@
 from urllib.parse import urlparse
 
+from payments.availability import billing_operation
+
 from django.db import transaction
 
 from .models import Plan, Subscription, PlanChange
 
 
 @transaction.atomic
+@billing_operation
 def reserve_subscription(user, plan):
     locked = Plan.objects.select_for_update().get(pk=plan.pk)
     if locked.founder and locked.subscriber_limit:
@@ -22,6 +25,7 @@ def reserve_subscription(user, plan):
     return Subscription.objects.create(user=user, plan=locked)
 
 
+@billing_operation
 def begin_or_resume_payment(subscription, client=None):
     """Return the provider checkout URL without duplicating an existing preapproval."""
     if subscription.status != "pending":
@@ -61,6 +65,7 @@ def begin_or_resume_payment(subscription, client=None):
     return checkout_url
 
 
+@billing_operation
 def begin_or_resume_pix_payment(subscription, client=None):
     """Open a Pix-only Checkout Pro preference for one plan period."""
     if subscription.status != "pending":

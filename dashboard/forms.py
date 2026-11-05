@@ -1,4 +1,8 @@
 from django import forms
+from django.conf import settings
+from django.utils import timezone
+
+from downloads.models import Application
 
 from core.models import FAQ, Feature, LegalPage, ServiceStatus, SocialLink, UpdatePost
 from downloads.models import AppVersion
@@ -98,13 +102,17 @@ class AppVersionForm(AdminModelForm):
         fields = ("application", "platform", "version", "channel", "file", "release_notes", "published")
         labels = {"version": "Versão", "channel": "Canal", "file": "Instalador ou APK", "release_notes": "Notas da versão", "published": "Disponível para download"}
         help_texts = {"platform":"Para RoadLedger, mantenha Windows. No TabletBridge, escolha Windows ou Android.","file":"TabletBridge: instalador Windows ou APK Android, até 300 MB."}
-        widgets = {"release_notes": forms.Textarea(attrs={"rows": 4})}
+        widgets = {"release_notes": forms.Textarea(attrs={"rows": 4}), "file": forms.FileInput}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if settings.MANUAL_APP_ACCESS:
+            self.fields.pop("plan_codes")
+            self.fields["application"].choices = Application.objects.values_list("code", "name")
         if self.instance.pk:
             self.fields["file"].required = False
-            self.fields["plan_codes"].initial = ", ".join(self.instance.min_plan_codes)
+            if "plan_codes" in self.fields:
+                self.fields["plan_codes"].initial = ", ".join(self.instance.min_plan_codes)
 
     def clean(self):
         cleaned=super().clean()
@@ -114,10 +122,13 @@ class AppVersionForm(AdminModelForm):
 
     def save(self, commit=True):
         item = super().save(commit=False)
-        item.min_plan_codes = [x.strip() for x in self.cleaned_data["plan_codes"].split(",") if x.strip()]
+        if item.published and (not item.published_at or "published" in self.changed_data):
+            item.published_at = timezone.now()
+        if "plan_codes" in self.cleaned_data:
+            item.min_plan_codes = [x.strip() for x in self.cleaned_data["plan_codes"].split(",") if x.strip()]
         if commit:
             item.save()
-            if item.file:
+            if item.file and ("file" in self.changed_data or not item.sha256):
                 item.sha256 = item.calculate_hash()
                 item.file_size = item.file.size
                 item.save(update_fields=["sha256", "file_size"])

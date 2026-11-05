@@ -52,3 +52,17 @@ class DownloadEvent(models.Model):
     user_agent = models.TextField(blank=True)
     allowed = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Application(models.Model):
+    code = models.SlugField(primary_key=True, max_length=12, choices=AppVersion.APPLICATIONS)
+    name = models.CharField("Nome", max_length=100)
+    description = models.TextField("Descrição", blank=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Aplicativo"
+        verbose_name_plural = "Aplicativos"
+
+    def __str__(self):
+        return self.name

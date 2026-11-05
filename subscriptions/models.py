@@ -2,6 +2,20 @@ from django.conf import settings
 from django.db import models
 
 
+class AppGrant(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="app_grants")
+    application = models.CharField(max_length=12)
+    enabled = models.BooleanField(default=True)
+    expires_at = models.DateTimeField(blank=True, null=True)
+    plan_code = models.CharField(blank=True, max_length=50)
+    features = models.JSONField(default=list, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("user", "application"), name="one_grant_per_roadledger_app")]
+
+
 class Plan(models.Model):
     PRODUCT_CHOICES = [("player", "Player — offline e online"), ("company", "Empresa Virtual — os três aplicativos")]
     product = models.CharField("Aplicativos incluídos", max_length=12, choices=PRODUCT_CHOICES, default="player")

@@ -8,6 +8,7 @@ from accounts.models import User
 from api.company_api import DEFAULT_RULES
 from api.models import Candidacy, EmployeeContract, FreightEvent, OnlineFreight, Vacancy, VirtualCompany
 from licenses.models import ApiToken
+from subscriptions.models import AppGrant
 
 from .models import ClientCursor, InboxEvent, OutboxEvent
 
@@ -18,6 +19,9 @@ class EventIntegrationTests(TestCase):
         self.owner = User.objects.create_user("event-owner@example.com", "test", lifetime_access=True)
         self.player = User.objects.create_user("event-player@example.com", "test")
         self.other = User.objects.create_user("event-other@example.com", "test")
+        AppGrant.objects.bulk_create(
+            AppGrant(user=user, application="player") for user in (self.owner, self.player, self.other)
+        )
         self.tokens = {u.pk: ApiToken.issue(u)[1] for u in (self.owner, self.player, self.other)}
         company = VirtualCompany.objects.create(
             owner=self.owner, name="Evento", game="ETS2", rules=DEFAULT_RULES
